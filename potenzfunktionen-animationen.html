@@ -1,0 +1,510 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Potenzfunktionen: Animationen</title>
+<!--
+  Drei Animationen zu Potenzfunktionen (Klasse 4c).
+  Direkte Links:   ...#drehung-0   ...#drehung-1   ...#umblaettern
+  Tasten:  Leertaste Start/Pause · ← → Schritt (mit Shift: grösser) · M halbe Drehung
+           R zurück · E Ende · 1 2 3 Szene · Z Ziel zeigen (Umblättern) · H Leiste aus/ein · F Vollbild
+  Die Datei ist vollständig eigenständig (keine externen Dateien).
+-->
+<style>
+  :root {
+    --ink: #1d1d1f;
+    --muted: #6e6e73;
+    --grid: #ececf0;
+    --blue: #1f5fbf;
+    --red: #c4452f;
+    --bg: #ffffff;
+    --bar: rgba(248, 248, 250, 0.96);
+    --line: #dcdce2;
+  }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); overflow: hidden;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  #c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  #title { position: fixed; top: 18px; left: 26px; font-size: 22px; font-weight: 600; letter-spacing: .01em; }
+  #legend { position: fixed; top: 52px; left: 26px; font-size: 16px; color: var(--muted); line-height: 1.6; }
+  #legend .sw { display: inline-block; width: 22px; height: 0; vertical-align: middle; margin-right: 6px; border-top: 3px solid; }
+  #legend .grey { border-color: #9a9aa0; }
+  #legend .blue { border-color: var(--blue); }
+  #legend .dash { border-top: 3px dashed var(--blue); opacity: .7; }
+  #bar { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%);
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; align-items: center;
+    max-width: calc(100vw - 32px); box-sizing: border-box;
+    background: var(--bar); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px;
+    box-shadow: 0 2px 12px rgba(0,0,0,.06); transition: opacity .35s; }
+  #bar.faded { opacity: 0.08; }
+  #bar.hidden { opacity: 0; pointer-events: none; }
+  button { font: inherit; font-size: 14px; border: 1px solid #d0d0d6; background: #fff; color: var(--ink);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer; }
+  button:hover { border-color: #a8a8b0; }
+  button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .sep { width: 1px; height: 24px; background: var(--line); }
+  input[type=range] { width: 240px; accent-color: var(--blue); }
+  #deg { font-variant-numeric: tabular-nums; min-width: 40px; text-align: right; font-size: 14px; color: var(--muted); }
+  .grp { display: flex; gap: 6px; align-items: center; }
+  .only3 { display: none; }
+  body.s3 .only3 { display: flex; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="title"></div>
+<div id="legend"></div>
+
+<div id="bar">
+  <div class="grp">
+    <button data-scene="0" title="Taste 1">Drehung um (0 | 0)</button>
+    <button data-scene="1" title="Taste 2">Drehung um (1 | 0)</button>
+    <button data-scene="2" title="Taste 3">Umblättern</button>
+  </div>
+  <div class="sep"></div>
+  <div class="grp">
+    <button id="play" title="Leertaste">▶ Start</button>
+    <input id="slider" type="range" min="0" max="1000" value="0" step="1" aria-label="Drehwinkel">
+    <span id="deg">0°</span>
+    <button id="reset" title="Taste R">Zurück</button>
+  </div>
+  <div class="sep only3"></div>
+  <div class="grp only3">
+    <button data-a="1">y = x</button>
+    <button data-a="2">y = x²</button>
+    <button data-a="0.5">y = √x</button>
+    <button id="target" title="Taste Z">Ziel zeigen</button>
+  </div>
+  <div class="sep"></div>
+  <button id="fs" title="Taste F">Vollbild</button>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  // ------------------------------------------------------------------
+  // State
+  // ------------------------------------------------------------------
+  const PI = Math.PI;
+  const DURATION = 6000;                  // ms for a full 180° turn
+  const HASHES = ["drehung-0", "drehung-1", "umblaettern"];
+  const TITLES = ["Drehung um (0 | 0)", "Drehung um (1 | 0)", "Umblättern"];
+  const state = { scene: 0, w: 0, playing: false, a: 1, showTarget: false,
+                  yaw: 0.42, pitch: 0.26, barHidden: false };
+  // redraw at most once per frame
+  let drawPending = false;
+  function requestDraw() {
+    if (drawPending) return;
+    drawPending = true;
+    requestAnimationFrame(() => { drawPending = false; draw(); });
+  }
+
+  const cv = document.getElementById("c");
+  const ctx = cv.getContext("2d");
+  let W = 0, H = 0;
+
+  const COL = { ink: "#1d1d1f", muted: "#6e6e73", grid: "#ececf0", gridDark: "#dadae0",
+                blue: "#1f5fbf", red: "#c4452f", grey: "#9a9aa0" };
+  const NUM_FONT = '"Cambria Math", "STIX Two Math", "Latin Modern Math", Georgia, "Times New Roman", serif';
+
+  // ------------------------------------------------------------------
+  // Helpers
+  // ------------------------------------------------------------------
+  const q = () => (1 - Math.cos(state.w)) / 2;
+  // signed distance from the pivot (1|0) of the tick labelled x
+  function rOf(x, qq) {
+    if (x === Infinity) return qq > 1e-12 ? 1 / qq : Infinity;
+    const den = (1 - qq) + qq * x;
+    if (den <= 1e-12) return -Infinity;
+    return (x - 1) / den;
+  }
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  // vertical space kept free for the control bar
+  function barSpace() {
+    const b = document.getElementById("bar");
+    return state.barHidden ? 24 : b.offsetHeight + 30;
+  }
+  const LABELS = new Map([[0, "0"], [0.25, "¼"], [0.5, "½"], [1, "1"], [2, "2"], [3, "3"], [4, "4"],
+                          [5, "5"], [6, "6"], [-1, "−1"], [-2, "−2"], [-3, "−3"], [-4, "−4"]]);
+  const lab = (k) => LABELS.has(k) ? LABELS.get(k) : String(k);
+
+  function line(x1, y1, x2, y2) { ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); }
+  function dot(x, y, r, col) { ctx.beginPath(); ctx.arc(x, y, r, 0, 2 * PI); ctx.fillStyle = col; ctx.fill(); }
+  function arrowHead(x, y, ang, size, col) {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(ang); ctx.beginPath();
+    ctx.moveTo(0, 0); ctx.lineTo(-size, size * 0.45); ctx.lineTo(-size, -size * 0.45); ctx.closePath();
+    ctx.fillStyle = col; ctx.fill(); ctx.restore();
+  }
+  function text(str, x, y, col, size, align = "center", base = "middle", italic = false) {
+    ctx.font = `${italic ? "italic " : ""}${size}px ${NUM_FONT}`;
+    ctx.fillStyle = col; ctx.textAlign = align; ctx.textBaseline = base;
+    ctx.fillText(str, x, y);
+  }
+
+  // ------------------------------------------------------------------
+  // 2D view (equal units on both axes)
+  // ------------------------------------------------------------------
+  function view2d(xmin, xmax, ymin, ymax) {
+    const top = 96, bottom = barSpace(), side = 40;
+    const s = Math.min((W - 2 * side) / (xmax - xmin), (H - top - bottom) / (ymax - ymin));
+    const cx = W / 2 - s * (xmin + xmax) / 2;
+    const cy = top + (H - top - bottom) / 2 + s * (ymin + ymax) / 2;
+    const v = { s, X: x => cx + s * x, Y: y => cy - s * y,
+                xmin: (0 - cx) / s, xmax: (W - cx) / s, ymin: (cy - H) / s, ymax: cy / s };
+    return v;
+  }
+  function grid2d(v) {
+    ctx.lineWidth = 1; ctx.strokeStyle = COL.grid;
+    for (let x = Math.ceil(v.xmin); x <= v.xmax; x++) line(v.X(x), 0, v.X(x), H);
+    for (let y = Math.ceil(v.ymin); y <= v.ymax; y++) line(0, v.Y(y), W, v.Y(y));
+    // y-axis
+    ctx.strokeStyle = COL.gridDark; ctx.lineWidth = 1.5;
+    line(v.X(0), v.Y(v.ymin), v.X(0), v.Y(v.ymax) + 30);
+    arrowHead(v.X(0), v.Y(v.ymax) + 30, -PI / 2, 11, COL.gridDark);
+    text("y", v.X(0) + 14, v.Y(v.ymax) + 38, COL.muted, 20, "left", "middle", true);
+  }
+  function fontSize(v) { return clamp(v.s * 0.2, 15, 24); }
+
+  // ticks on a straight axis: base point B, direction (cx,cy), offsets along the axis
+  function ticks2d(v, base, dir, list, col, labelOffsetPx, labelled = true, tickPx = 7) {
+    const [bx, by] = base, [dx, dy] = dir;
+    // normal in screen coordinates (left of the direction)
+    const nx = -dy, ny = -dx;        // screen y is flipped
+    const fs = fontSize(v);
+    for (const t of list) {
+      if (!isFinite(t.r)) continue;
+      const X = v.X(bx + t.r * dx), Y = v.Y(by + t.r * dy);
+      if (X < -60 || X > W + 60 || Y < -60 || Y > H + 60) continue;
+      ctx.strokeStyle = col; ctx.lineWidth = 2;
+      const len = t.minor ? tickPx * 0.6 : tickPx;
+      line(X - nx * len, Y - ny * len, X + nx * len, Y + ny * len);
+      if (labelled && !t.minor) {
+        if (labelOffsetPx === "below") text(lab(t.k), X, Y + 2.1 * fs, col, fs);
+        else text(lab(t.k), X + nx * labelOffsetPx, Y + ny * labelOffsetPx, col, fs);
+      }
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // Scene 1: rotation about (0|0)
+  // ------------------------------------------------------------------
+  function scene0() {
+    const v = view2d(-5.4, 5.4, -4.6, 4.6);
+    grid2d(v);
+    const ks = [-4, -3, -2, -1, 0, 1, 2, 3, 4];
+    const fs = fontSize(v);
+    // static copy (red)
+    ctx.strokeStyle = COL.red; ctx.lineWidth = 2.5;
+    line(0, v.Y(0), W - 24, v.Y(0));
+    arrowHead(W - 24, v.Y(0), 0, 13, COL.red);
+    text("x", W - 30, v.Y(0) + 2.1 * fs, COL.red, 20, "center", "middle", true);
+    ticks2d(v, [0, 0], [1, 0], ks.map(k => ({ k, r: k })), COL.red, "below");
+    // rotating axis (blue)
+    const w = state.w, d = [Math.cos(w), Math.sin(w)];
+    const L = 12;
+    ctx.strokeStyle = COL.blue; ctx.lineWidth = 3;
+    line(v.X(-L * d[0]), v.Y(-L * d[1]), v.X(L * d[0]), v.Y(L * d[1]));
+    const tip = 5.0;
+    arrowHead(v.X(tip * d[0]), v.Y(tip * d[1]), -w, 14, COL.blue);
+    ticks2d(v, [0, 0], d, ks.map(k => ({ k, r: k })), COL.blue, 1.1 * fs);
+    dot(v.X(0), v.Y(0), 5, COL.ink);
+  }
+
+  // ------------------------------------------------------------------
+  // Scene 2: rotation about (1|0) with squeezing
+  // ------------------------------------------------------------------
+  const MAJOR2 = [0, 0.25, 0.5, 1, 2, 3, 4, 5];
+  const MINOR2 = [1/10, 1/8, 1/6, 1/3, 6, 8, 10, 12, 16, 20, 30, 50];
+  const LABELLED_MOVING = new Set([0, 0.25, 0.5, 1, 2, 4]);
+  function scene1() {
+    const v = view2d(-1.4, 5.6, -3.4, 3.4);
+    grid2d(v);
+    const fs = fontSize(v);
+    const qq = q(), w = state.w, d = [Math.cos(w), Math.sin(w)];
+    // static half-axis (red)
+    ctx.strokeStyle = COL.red; ctx.lineWidth = 2.5;
+    line(v.X(0), v.Y(0), W - 24, v.Y(0));
+    arrowHead(W - 24, v.Y(0), 0, 13, COL.red);
+    text("x", W - 30, v.Y(0) + 2.1 * fs, COL.red, 20, "center", "middle", true);
+    const statList = MAJOR2.map(k => ({ k, r: k - 1 }));
+    ticks2d(v, [1, 0], [1, 0], statList, COL.red, "below");
+    // rotating half-axis (blue): from the image of 0 to the image of ∞
+    const CAP = 40;
+    const r0 = clamp(rOf(0, qq), -CAP, CAP), rInf = clamp(rOf(Infinity, qq), -CAP, CAP);
+    ctx.strokeStyle = COL.blue; ctx.lineWidth = 3;
+    line(v.X(1 + r0 * d[0]), v.Y(r0 * d[1]), v.X(1 + rInf * d[0]), v.Y(rInf * d[1]));
+    const movList = MAJOR2.map(k => ({ k, r: rOf(k, qq), minor: !LABELLED_MOVING.has(k) }))
+      .concat(MINOR2.map(k => ({ k, r: rOf(k, qq), minor: true })));
+    ticks2d(v, [1, 0], d, movList, COL.blue, 1.1 * fs);
+    // the end "∞"
+    if (Math.abs(rOf(Infinity, qq)) < CAP) {
+      const X = v.X(1 + rInf * d[0]), Y = v.Y(rInf * d[1]);
+      const nx = -d[1], ny = -d[0];
+      dot(X, Y, 4, COL.blue);
+      text("∞", X + nx * 1.2 * fs, Y + ny * 1.2 * fs, COL.blue, fs * 1.15);
+    }
+    dot(v.X(1), v.Y(0), 5, COL.ink);
+  }
+
+  // ------------------------------------------------------------------
+  // Scene 3: page turn in 3D (heights are kept)
+  // ------------------------------------------------------------------
+  const XMAX3 = 6, ZTOP = 5.2;
+  // The camera turns about the centre of the scene. The scale is fitted once for the
+  // default camera, so dragging only turns the picture and never rescales it.
+  const DEFAULT_YAW = 0.42, DEFAULT_PITCH = 0.26;
+  const CENTRE3 = [(-1.2 + XMAX3 + 0.6) / 2, 0, (-0.6 + ZTOP + 0.4) / 2];
+  function rawProj(X, D, Z, yaw, pitch) {
+    X -= CENTRE3[0]; D -= CENTRE3[1]; Z -= CENTRE3[2];
+    const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
+    const x1 = X * cy - D * sy, d1 = X * sy + D * cy;
+    return [x1, Z * cp + d1 * sp];
+  }
+  function makeProj() {
+    let a = Infinity, b = -Infinity, c = Infinity, e = -Infinity;
+    for (const X of [-1.2, XMAX3 + 0.6]) for (const D of [-2.3, 2.3]) for (const Z of [-0.6, ZTOP + 0.4]) {
+      const [u, t] = rawProj(X, D, Z, DEFAULT_YAW, DEFAULT_PITCH);
+      a = Math.min(a, u); b = Math.max(b, u); c = Math.min(c, t); e = Math.max(e, t);
+    }
+    const top = 100, bottom = barSpace() + 10, side = 40;
+    const s = Math.min((W - 2 * side) / (b - a), (H - top - bottom) / (e - c));
+    const ox = W / 2 - s * (a + b) / 2, oy = top + (H - top - bottom) / 2 + s * (c + e) / 2;
+    const yaw = state.yaw, pitch = state.pitch;
+    const P = (X, D, Z) => { const [u, t] = rawProj(X, D, Z, yaw, pitch); return [ox + s * u, oy - s * t]; };
+    P.s = s;
+    return P;
+  }
+  function poly3(P, pts, fill, stroke, lw = 1) {
+    ctx.beginPath();
+    pts.forEach((p, i) => { const [x, y] = P(...p); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+    ctx.closePath();
+    if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+    if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lw; ctx.stroke(); }
+  }
+  function seg3(P, p1, p2) { const [a, b] = P(...p1), [c, d] = P(...p2); line(a, b, c, d); }
+  // polyline through f(t), broken where invalid
+  function curve3(P, ts, f) {
+    ctx.beginPath(); let pen = false;
+    for (const t of ts) {
+      const p = f(t);
+      if (!p) { pen = false; continue; }
+      const [x, y] = P(...p);
+      if (pen) ctx.lineTo(x, y); else { ctx.moveTo(x, y); pen = true; }
+    }
+    ctx.stroke();
+  }
+  const LOGTS = (() => { const a = []; const lo = Math.log(0.002), hi = Math.log(80);
+    for (let i = 0; i <= 900; i++) a.push(Math.exp(lo + (hi - lo) * i / 900)); return a; })();
+
+  function scene2() {
+    const P = makeProj();
+    const fs = clamp(P.s * 0.2, 15, 24);
+    const a = state.a, qq = q(), w = state.w, c = Math.cos(w), sn = Math.sin(w);
+    const CAP = XMAX3 - 0.5;
+    const pos = (u) => { const r = rOf(u, qq); if (!isFinite(r) || Math.abs(r) > CAP) return null; return [1 + r * c, r * sn]; };
+
+    // static page with grid
+    poly3(P, [[0, 0, 0], [XMAX3, 0, 0], [XMAX3, 0, ZTOP], [0, 0, ZTOP]], "rgba(0,0,0,0.018)", null);
+    ctx.strokeStyle = COL.grid; ctx.lineWidth = 1;
+    for (let X = 1; X <= XMAX3; X++) seg3(P, [X, 0, 0], [X, 0, ZTOP]);
+    for (let Z = 1; Z <= 5; Z++) seg3(P, [0, 0, Z], [XMAX3, 0, Z]);
+    // spine x = 1
+    ctx.setLineDash([5, 6]); ctx.strokeStyle = COL.gridDark; ctx.lineWidth = 1.5;
+    seg3(P, [1, 0, 0], [1, 0, ZTOP]); ctx.setLineDash([]);
+    // vertical axis (the graph's y-axis)
+    ctx.strokeStyle = COL.gridDark; ctx.lineWidth = 1.5;
+    seg3(P, [0, 0, 0], [0, 0, ZTOP + 0.3]);
+    { const [x, y] = P(0, 0, ZTOP + 0.3); arrowHead(x, y, -PI / 2, 11, COL.gridDark);
+      text("y", x + 14, y + 6, COL.muted, 20, "left", "middle", true); }
+    for (let Z = 1; Z <= 5; Z++) { const [x, y] = P(0, 0, Z); text(String(Z), x - 10, y, COL.muted, fs * 0.85, "right"); }
+    // static x-axis (red)
+    ctx.strokeStyle = COL.red; ctx.lineWidth = 2.5;
+    seg3(P, [0, 0, 0], [XMAX3 + 0.5, 0, 0]);
+    { const [x1, y1] = P(XMAX3, 0, 0), [x2, y2] = P(XMAX3 + 0.5, 0, 0);
+      arrowHead(x2, y2, Math.atan2(y2 - y1, x2 - x1), 13, COL.red);
+      text("x", x2, y2 + 2.1 * fs, COL.red, 20, "center", "middle", true); }
+    for (const k of [0, 0.25, 0.5, 1, 2, 3, 4, 5, 6]) {
+      const [x, y] = P(k, 0, 0);
+      ctx.strokeStyle = COL.red; ctx.lineWidth = 2; line(x, y - 6, x, y + 6);
+      text(lab(k), x, y + 2.1 * fs, COL.red, fs);
+    }
+
+    // static curves: original (grey) and optional target (dashed)
+    ctx.lineWidth = 3.5; ctx.strokeStyle = COL.grey;
+    curve3(P, LOGTS, u => { const z = Math.pow(u, a); return (u <= XMAX3 && z <= ZTOP) ? [u, 0, z] : null; });
+    if (state.showTarget) {
+      ctx.setLineDash([9, 7]); ctx.lineWidth = 2.5; ctx.strokeStyle = "rgba(31,95,191,0.55)";
+      curve3(P, LOGTS, x => { const z = Math.pow(x, -a); return (x <= XMAX3 && z <= ZTOP) ? [x, 0, z] : null; });
+      ctx.setLineDash([]);
+    }
+
+    // moving page
+    const r0 = clamp(rOf(0, qq), -CAP, CAP), rI = clamp(rOf(Infinity, qq), -CAP, CAP);
+    const E0 = [1 + r0 * c, r0 * sn], EI = [1 + rI * c, rI * sn];
+    poly3(P, [[E0[0], E0[1], 0], [EI[0], EI[1], 0], [EI[0], EI[1], ZTOP], [E0[0], E0[1], ZTOP]],
+          "rgba(31,95,191,0.07)", "rgba(31,95,191,0.35)", 1.2);
+    // grid on the moving page (vertical lines at the same x-values as the static grid)
+    ctx.strokeStyle = "rgba(31,95,191,0.16)"; ctx.lineWidth = 1;
+    for (const u of [0.25, 0.5, 1, 2, 3, 4, 5, 6]) { const p = pos(u); if (p) seg3(P, [p[0], p[1], 0], [p[0], p[1], ZTOP]); }
+    for (let Z = 1; Z <= 5; Z++) seg3(P, [E0[0], E0[1], Z], [EI[0], EI[1], Z]);
+    // moving x-axis with ticks (labels above the axis, on the page)
+    ctx.strokeStyle = COL.blue; ctx.lineWidth = 3;
+    seg3(P, [E0[0], E0[1], 0], [EI[0], EI[1], 0]);
+    for (const k of [0, 0.25, 0.5, 1, 2, 3, 4, 5, 6]) {
+      const p = pos(k); if (!p) continue;
+      const [x, y] = P(p[0], p[1], 0);
+      ctx.strokeStyle = COL.blue; ctx.lineWidth = 2; line(x, y - 6, x, y + 6);
+      if (!LABELLED_MOVING.has(k)) continue;
+      const [lx, ly] = P(p[0], p[1], 0.36);
+      text(lab(k), lx, ly, COL.blue, fs);
+    }
+    // moving graph (keeps its heights)
+    ctx.lineWidth = 4; ctx.strokeStyle = COL.blue;
+    curve3(P, LOGTS, u => { const z = Math.pow(u, a); const p = pos(u); return (p && z <= ZTOP) ? [p[0], p[1], z] : null; });
+    // the point (2 | 2^a)
+    { const p = pos(2), z = Math.pow(2, a);
+      if (p && z <= ZTOP) { const [x, y] = P(p[0], p[1], z); dot(x, y, 6.5, COL.blue);
+        text("P", x + 12, y - 12, COL.blue, fs, "left", "middle", true); } }
+  }
+
+  // ------------------------------------------------------------------
+  // Legend for scene 3
+  // ------------------------------------------------------------------
+  function legendHTML() {
+    if (state.scene !== 2) return "";
+    const a = state.a;
+    const f = a === 1 ? "y = x" : a === 2 ? "y = x<sup>2</sup>" : "y = √x";
+    const g = a === 1 ? "y = x<sup>−1</sup>" : a === 2 ? "y = x<sup>−2</sup>" : "y = x<sup>−1/2</sup>";
+    let s = `<span class="sw grey"></span><i>${f}</i>`;
+    if (state.showTarget) s += `<br><span class="sw dash"></span><i>${g}</i>`;
+    return s;
+  }
+
+  // ------------------------------------------------------------------
+  // Drawing and UI
+  // ------------------------------------------------------------------
+  const elTitle = document.getElementById("title"), elLegend = document.getElementById("legend");
+  const elPlay = document.getElementById("play"), elSlider = document.getElementById("slider"), elDeg = document.getElementById("deg");
+  const elTarget = document.getElementById("target"), bar = document.getElementById("bar");
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, W, H);
+    ctx.lineCap = "round";
+    [scene0, scene1, scene2][state.scene]();
+    elTitle.textContent = TITLES[state.scene];
+    const lg = legendHTML();
+    if (elLegend.innerHTML !== lg) elLegend.innerHTML = lg;
+    elSlider.value = Math.round(state.w / PI * 1000);
+    elDeg.textContent = Math.round(state.w / PI * 180) + "°";
+    elPlay.textContent = state.playing ? "❚❚ Pause" : "▶ Start";
+    document.querySelectorAll("[data-scene]").forEach(b => b.classList.toggle("on", +b.dataset.scene === state.scene));
+    document.querySelectorAll("[data-a]").forEach(b => b.classList.toggle("on", +b.dataset.a === state.a));
+    elTarget.classList.toggle("on", state.showTarget);
+    document.body.classList.toggle("s3", state.scene === 2);
+  }
+
+  function resize() {
+    const dpr = window.devicePixelRatio || 1;
+    W = window.innerWidth; H = window.innerHeight;
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    draw();
+  }
+
+  let last = null;
+  function tick(t) {
+    if (state.playing) {
+      if (last !== null) {
+        state.w = Math.min(PI, state.w + PI * (t - last) / DURATION);
+        if (state.w >= PI) state.playing = false;
+      }
+      last = t; draw();
+    } else last = null;
+    requestAnimationFrame(tick);
+  }
+
+  function setScene(i, fromHash = false) {
+    state.scene = i; state.w = 0; state.playing = false;
+    if (!fromHash && location.hash.slice(1) !== HASHES[i]) {
+      try { history.replaceState(null, "", "#" + HASHES[i]); } catch (err) { /* not allowed in some local contexts */ }
+    }
+    draw();
+  }
+  function togglePlay() {
+    if (!state.playing && state.w >= PI - 1e-9) state.w = 0;
+    state.playing = !state.playing; draw(); wake();
+  }
+  function setW(w) { state.w = clamp(w, 0, PI); state.playing = false; draw(); }
+
+  document.querySelectorAll("[data-scene]").forEach(b => b.addEventListener("click", () => setScene(+b.dataset.scene)));
+  document.querySelectorAll("[data-a]").forEach(b => b.addEventListener("click", () => { state.a = +b.dataset.a; setW(0); }));
+  elPlay.addEventListener("click", togglePlay);
+  document.getElementById("reset").addEventListener("click", () => setW(0));
+  elTarget.addEventListener("click", () => { state.showTarget = !state.showTarget; draw(); });
+  elSlider.addEventListener("input", () => setW(elSlider.value / 1000 * PI));
+  document.getElementById("fs").addEventListener("click", toggleFullscreen);
+  function toggleFullscreen() {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();
+  }
+
+  window.addEventListener("keydown", (e) => {
+    if (e.target && e.target.tagName === "INPUT" && (e.key === "ArrowLeft" || e.key === "ArrowRight")) e.preventDefault();
+    const step = (e.shiftKey ? 10 : 1) * PI / 180;
+    switch (e.key) {
+      case " ": e.preventDefault(); togglePlay(); break;
+      case "ArrowRight": e.preventDefault(); setW(state.w + step); break;
+      case "ArrowLeft": e.preventDefault(); setW(state.w - step); break;
+      case "r": case "R": case "Home": setW(0); break;
+      case "e": case "E": case "End": setW(PI); break;
+      case "m": case "M": setW(PI / 2); break;
+      case "1": setScene(0); break;
+      case "2": setScene(1); break;
+      case "3": setScene(2); break;
+      case "z": case "Z": if (state.scene === 2) { state.showTarget = !state.showTarget; draw(); } break;
+      case "h": case "H": state.barHidden = !state.barHidden; bar.classList.toggle("hidden", state.barHidden); draw(); break;
+      case "f": case "F": toggleFullscreen(); break;
+    }
+    wake();
+  });
+
+  // camera drag in scene 3 (double click resets the camera)
+  let drag = null;
+  cv.addEventListener("pointerdown", (e) => { if (state.scene === 2) { drag = { x: e.clientX, y: e.clientY, yaw: state.yaw, pitch: state.pitch }; cv.setPointerCapture(e.pointerId); } });
+  cv.addEventListener("pointermove", (e) => {
+    wake();
+    if (!drag) return;
+    state.yaw = clamp(drag.yaw + (e.clientX - drag.x) * 0.005, -1.5, 1.5);
+    state.pitch = clamp(drag.pitch + (e.clientY - drag.y) * 0.005, -0.2, 1.1);
+    requestDraw();
+  });
+  cv.addEventListener("pointerup", () => { drag = null; });
+  cv.addEventListener("pointercancel", () => { drag = null; });
+  cv.addEventListener("dblclick", () => { if (state.scene === 2) { state.yaw = DEFAULT_YAW; state.pitch = DEFAULT_PITCH; draw(); } });
+
+  // fade the control bar while idle
+  let idleTimer = null;
+  function wake() {
+    bar.classList.remove("faded");
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => { if (!bar.matches(":hover")) bar.classList.add("faded"); }, 3000);
+  }
+  bar.addEventListener("mouseenter", () => bar.classList.remove("faded"));
+  window.addEventListener("mousemove", wake);
+
+  window.addEventListener("hashchange", () => { const i = HASHES.indexOf(location.hash.slice(1)); if (i >= 0) setScene(i, true); });
+  window.addEventListener("resize", resize);
+
+  // for testing
+  window.__anim = { state, setW, setScene, draw };
+
+  const i0 = HASHES.indexOf(location.hash.slice(1));
+  if (i0 >= 0) state.scene = i0;
+  resize(); wake();
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
