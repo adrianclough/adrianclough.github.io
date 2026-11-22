@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="de-CH">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Die Ableitung: Sekante, Tangente, Differenzenquotient</title>
+<style>
+#abl {
+  --f:#111111; --tan:#007D3E; --stg:#C82323; --sek:#E17800; --abl:#1450B9; --dark:#23373B;
+  font-family:"Fira Sans","Segoe UI",system-ui,-apple-system,Helvetica,Arial,sans-serif;
+  color:#1a1a1a; max-width:900px; margin:0 auto; padding:10px; box-sizing:border-box; font-size:15px; line-height:1.35;
+}
+#abl *, #abl *::before, #abl *::after { box-sizing:border-box; }
+#abl .bar { background:var(--dark); color:#fff; padding:9px 14px; display:flex; flex-wrap:wrap; gap:8px 18px; align-items:center; }
+#abl .bar h2 { font-size:17px; font-weight:500; margin:0; flex:1 1 auto; }
+#abl .bar label { font-size:14px; }
+#abl select { font:inherit; font-size:14px; padding:3px 6px; border-radius:3px; border:1px solid #9aa; }
+#abl .terms { padding:8px 2px 4px; display:flex; flex-wrap:wrap; gap:4px 36px; font-size:18px; }
+#abl .tx { font-family:"Fira Sans","Segoe UI",system-ui,sans-serif; font-size:0.85em; }
+#abl canvas { display:block; width:100%; touch-action:none; user-select:none; -webkit-user-select:none; }
+#abl .m { font-family:"Latin Modern Math","STIX Two Math","Cambria Math","Times New Roman",serif; font-size:1.08em; white-space:nowrap; }
+#abl .m i { font-style:italic; }
+#abl .hx { position:relative; font-style:italic; display:inline-block; }
+#abl .hx::after { content:"\02C6"; position:absolute; left:0.16em; top:-0.12em; font-style:normal; line-height:1; }
+#abl .fr { display:inline-flex; flex-direction:column; vertical-align:middle; text-align:center; font-size:0.85em; margin:0 0.1em; }
+#abl .fr > span:first-child { border-bottom:1px solid currentColor; padding:0 0.15em; }
+#abl .status { min-height:22px; margin:6px 2px; font-size:14px; }
+#abl .status.warn { color:var(--stg); }
+#abl .status.ok { color:var(--tan); }
+#abl .panel { border-top:1px solid #ddd; padding:8px 2px; }
+#abl .row { display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px; margin:4px 0; }
+#abl .row .lab { width:2.2em; text-align:right; font-size:17px; }
+#abl input[type=range] { flex:1 1 220px; min-width:140px; }
+#abl .val { min-width:5.5em; font-variant-numeric:tabular-nums; }
+#abl button { font:inherit; font-size:14px; padding:4px 10px; border-radius:3px; border:1px solid var(--dark); background:#fff; color:var(--dark); cursor:pointer; }
+#abl button:hover { background:#eef2f2; }
+#abl button[aria-pressed="true"] { background:var(--dark); color:#fff; }
+#abl .toggles { display:grid; grid-template-columns:1fr 1fr; gap:0 28px; align-items:start; }
+#abl .grp { margin:3px 0 9px; }
+#abl .ind { margin-left:26px; margin-top:3px; }
+#abl .toggles label { display:flex; align-items:center; gap:7px; cursor:pointer; }
+#abl .toggles label.off { opacity:0.45; cursor:default; }
+#abl .sw { display:inline-block; width:22px; height:0; border-top:3px solid; flex:0 0 auto; }
+#abl .sub { font-size:14px; display:flex; flex-direction:column; gap:1px; margin:2px 0 2px 26px; }
+#abl .sub label { display:flex; align-items:center; gap:5px; }
+@media (max-width:560px) { #abl .toggles { grid-template-columns:1fr; } }
+#abl .vals { display:grid; grid-template-columns:auto auto auto auto; gap:2px 14px; font-variant-numeric:tabular-nums; justify-content:start; font-size:15px; }
+#abl .vals .k { text-align:right; }
+#abl .hidden { display:none !important; }
+</style>
+</head>
+<body>
+
+<div id="abl">
+  <div class="bar">
+    <h2>Die Ableitung</h2>
+    <label>Funktion
+      <select id="abl-fun"></select>
+    </label>
+    <label>Zoom um <i>P</i>
+      <input id="abl-zoom" type="range" min="0" max="2" step="0.01" value="0" style="width:120px;vertical-align:middle">
+      <span id="abl-zoomv">×1</span>
+    </label>
+  </div>
+
+  <div class="terms"><span id="abl-tf" class="m"></span><span id="abl-td" class="m" style="color:var(--abl)"></span></div>
+
+  <canvas id="abl-cv"></canvas>
+
+  <div id="abl-status" class="status"></div>
+
+  <div class="panel">
+    <div class="row">
+      <span class="lab m"><i>x</i></span>
+      <input id="abl-x" type="range" step="0.01">
+      <span id="abl-xv" class="val m"></span>
+    </div>
+    <div class="row" id="abl-xhrow">
+      <span class="lab m"><span class="hx" style="color:var(--sek)">x</span></span>
+      <input id="abl-xh" type="range" step="0.01">
+      <span id="abl-xhv" class="val m"></span>
+    </div>
+    <div class="row" id="abl-btnrow">
+      <span class="lab"></span>
+      <button id="abl-anim" type="button"><span class="m"><span class="hx">x</span> → <i>x</i></span> laufen lassen</button>
+      <button id="abl-eq" type="button" aria-pressed="false"><span class="m"><span class="hx">x</span> = <i>x</i></span></button>
+    </div>
+  </div>
+
+  <div class="panel toggles">
+    <div class="col">
+      <div class="grp">
+        <label><input type="checkbox" id="abl-sec"><span class="sw" style="border-color:var(--sek)"></span>Sekante durch <span class="m"><i>P</i></span> und <span class="m"><span class="hx">P</span></span></label>
+        <div class="ind">
+          <label id="abl-slopesl"><input type="checkbox" id="abl-slopes"><span class="sw" style="border-color:var(--stg)"></span>Steigung der Sekante</label>
+          <div class="sub" id="abl-smode">
+            <label><input type="radio" name="abl-sm" value="delta" checked> Schritt bis <span class="m"><span class="hx">x</span></span></label>
+            <label><input type="radio" name="abl-sm" value="one"> Schritt der Länge 1</label>
+          </div>
+        </div>
+      </div>
+      <div class="grp"><label><input type="checkbox" id="abl-dq"><span class="sw" style="border-color:var(--sek)"></span>Differenzenquotient</label></div>
+    </div>
+    <div class="col">
+      <div class="grp">
+        <label><input type="checkbox" id="abl-tanp"><span class="sw" style="border-color:var(--tan)"></span>Tangente in <span class="m"><i>P</i></span></label>
+        <div class="ind">
+          <label id="abl-slopetl"><input type="checkbox" id="abl-slopet"><span class="sw" style="border-color:var(--stg)"></span>Steigung der Tangente</label>
+        </div>
+      </div>
+      <div class="grp"><label><input type="checkbox" id="abl-der"><span class="sw" style="border-color:var(--abl)"></span>Ableitung <span class="m"><i>f</i>′</span></label></div>
+      <div class="grp"><label><input type="checkbox" id="abl-vals">Werte anzeigen</label></div>
+    </div>
+  </div>
+
+  <div class="panel" id="abl-valp">
+    <div class="vals" id="abl-vals-out"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var root = document.getElementById("abl");
+  var $ = function (id) { return document.getElementById("abl-" + id); };
+
+  // Farben wie in den Folien
+  var COL = { f: "#111111", tan: "#007D3E", stg: "#C82323", sek: "#E17800", abl: "#1450B9",
+              grid: "#e4e4e4", axis: "#333333", tick: "#666666", guide: "#9a9a9a" };
+  var MATHFONT = '"Latin Modern Math","STIX Two Math","Cambria Math","Times New Roman",serif';
+  var SANS = '"Fira Sans","Segoe UI",system-ui,-apple-system,Helvetica,Arial,sans-serif';
+  var HAT = "̂";           // kombinierender Zirkumflex, wird beim Zeichnen ausgewertet
+  var XH = "x" + HAT;            // x mit Dach
+  var hx = '<span class="hx">x</span>';
+  var fr = function (a, b) { return '<span class="fr"><span>' + a + "</span><span>" + b + "</span></span>"; };
+
+  // ------------------------------------------------------------------
+  // Feste Funktionen.  xr/yr: Fenster oben, dr: y-Fenster unten (Steigung),
+  // sr: Bereich der Schieberegler, nd: Stellen ohne Ableitung.
+  var FUNS = [
+    { name: "−1 + 2x", ft: "−1 + 2<i>x</i>", dt: "2", f: function (x) { return -1 + 2 * x; }, d: function () { return 2; },
+      xr: [-1.5, 4.5], yr: [-2, 7.5], dr: [-0.8, 3], sr: [-0.7, 3.7], x: 1, xh: 3 },
+    { name: "x²", ft: "<i>x</i><sup>2</sup>", dt: "2<i>x</i>", f: function (x) { return x * x; }, d: function (x) { return 2 * x; },
+      xr: [-2.5, 2.5], yr: [-1, 6.5], dr: [-5.2, 5.2], sr: [-2.5, 2.5], x: 1, xh: 1.5 },
+    { name: "x²/2 − 2x + 3", ft: fr("1", "2") + "<i>x</i><sup>2</sup> − 2<i>x</i> + 3", dt: "<i>x</i> − 2", f: function (x) { return x * x / 2 - 2 * x + 3; }, d: function (x) { return x - 2; },
+      xr: [-1, 5], yr: [-0.8, 5.8], dr: [-3.5, 3.5], sr: [-1, 5], x: 1, xh: 3 },
+    { name: "x³/6", ft: fr("1", "6") + "<i>x</i><sup>3</sup>", dt: fr("1", "2") + "<i>x</i><sup>2</sup>", f: function (x) { return x * x * x / 6; }, d: function (x) { return x * x / 2; },
+      xr: [-2.2, 3.2], yr: [-1.5, 5.6], dr: [-0.8, 5.2], sr: [-2.2, 3.1], x: 2, xh: 2.5 },
+    { name: "x³/6 − 3x/2", ft: fr("1", "6") + "<i>x</i><sup>3</sup> − " + fr("3", "2") + "<i>x</i>", dt: fr("1", "2") + "<i>x</i><sup>2</sup> − " + fr("3", "2"),
+      f: function (x) { return x * x * x / 6 - 1.5 * x; }, d: function (x) { return x * x / 2 - 1.5; },
+      xr: [-3, 3], yr: [-2.6, 2.6], dr: [-2, 3.3], sr: [-3, 3], x: -1, xh: 0.5 },
+    { name: "sin(x)", ft: "sin(<i>x</i>)", dt: "cos(<i>x</i>)", f: Math.sin, d: Math.cos,
+      xr: [-3.5, 7], yr: [-1.7, 1.7], dr: [-1.4, 1.4], sr: [-3.5, 7], x: 0.5, xh: 2 },
+    { name: "eˣ", ft: "e<sup><i>x</i></sup>", dt: "e<sup><i>x</i></sup>", f: Math.exp, d: Math.exp,
+      xr: [-3, 2.2], yr: [-0.6, 7.5], dr: [-0.6, 7.6], sr: [-3, 2], x: 0, xh: 1 },
+    { name: "|x|", ft: "|<i>x</i>|", dt: "−1 <span class=\"tx\">für</span> <i>x</i> &lt; 0,&nbsp; 1 <span class=\"tx\">für</span> <i>x</i> &gt; 0&nbsp; <span class=\"tx\">(bei 0 nicht definiert)</span>", f: Math.abs, d: function (x) { return x > 0 ? 1 : (x < 0 ? -1 : NaN); }, nd: [0],
+      xr: [-2.5, 2.5], yr: [-0.7, 2.7], dr: [-1.5, 1.5], sr: [-2.5, 2.5], x: 0, xh: 1 },
+    // zwei Knicke bei -1 und 1; an der Stelle 1 strebt q links gegen -2, rechts gegen 2
+    { name: "|x² − 1|", ft: "|<i>x</i><sup>2</sup> − 1|",
+      dt: "2<i>x</i> <span class=\"tx\">für</span> |<i>x</i>| &gt; 1,&nbsp; −2<i>x</i> <span class=\"tx\">für</span> |<i>x</i>| &lt; 1&nbsp; <span class=\"tx\">(bei ±1 nicht definiert)</span>",
+      f: function (x) { return Math.abs(x * x - 1); },
+      d: function (x) { var a = Math.abs(x); return a > 1 ? 2 * x : (a < 1 ? -2 * x : NaN); }, nd: [-1, 1],
+      xr: [-2.5, 2.5], yr: [-0.8, 4.6], dr: [-4.8, 4.8], sr: [-2.3, 2.3], x: 1, xh: 1.6 }
+  ];
+
+  var S = { fi: 3, x: 2, xh: 2.5, zoom: 1, sec: true, slopeS: false, smode: "delta", dq: false, der: false,
+            vals: false, lock: false, tanP: false, slopeT: false };
+  // lock: x^ wurde bewusst auf x gesetzt und folgt x.  Zufaelliges Ueberfahren von x^ mit x koppelt nicht.
+
+  var F = function () { return FUNS[S.fi]; };
+  var isTan = function () { return S.xh === S.x; };
+  var useXh = function () { return S.sec; };   // x-Dach gehoert allein zur Sekante
+  var ndAt = function (x) { var n = F().nd || []; for (var i = 0; i < n.length; i++) if (Math.abs(n[i] - x) < 1e-12) return true; return false; };
+  var dq = function (t) { return (F().f(t) - F().f(S.x)) / (t - S.x); };
+
+  // ------------------------------------------------------------------
+  // Zahlen
+  function fmt(v, d) {
+    if (!isFinite(v)) return "–";
+    if (d === undefined) d = 3;
+    var s = v.toFixed(d);
+    if (s.indexOf(".") >= 0) s = s.replace(/0+$/, "").replace(/\.$/, "");
+    if (s === "-0") s = "0";
+    return s.replace("-", "−").replace(".", ",");
+  }
+  function decs() {
+    var h = Math.abs(S.xh - S.x);
+    if (h > 0 && h < 0.01) return Math.min(10, Math.ceil(-Math.log10(h)) + 2);
+    return 3;
+  }
+  function nice(raw) {
+    var p = Math.pow(10, Math.floor(Math.log10(raw))), m = raw / p;
+    return (m < 1.5 ? 1 : m < 3 ? 2 : m < 7 ? 5 : 10) * p;
+  }
+
+  // ------------------------------------------------------------------
+  // Zeichenflaeche
+  var cv = $("cv"), ctx = cv.getContext("2d");
+  var L = null;  // aktuelles Layout
+
+  function views() {
+    // Beim Hineinzoomen wandert P allmaehlich in die Mitte des Fensters.
+    var f = F(), z = S.zoom;
+    var win = function (r, p) {
+      var span = r[1] - r[0], u0 = (p - r[0]) / span, u = u0 + (0.5 - u0) * (1 - 1 / z);
+      var lo = p - u * span / z; return [lo, lo + span / z];
+    };
+    // unten wird um (x | f'(x)) gezoomt, mit demselben Faktor: gleiche Hoeheneinheit in beiden Feldern
+    var dp = f.d(S.x); if (!isFinite(dp)) dp = 0;
+    dp = Math.min(Math.max(dp, f.dr[0]), f.dr[1]);
+    return { x: win(f.xr, S.x), y: win(f.yr, f.f(S.x)), d: win(f.dr, dp) };
+  }
+
+  function makePanel(x0, y0, w, h, xr, yr) {
+    return {
+      x0: x0, y0: y0, w: w, h: h, xr: xr, yr: yr,
+      X: function (v) { return x0 + (v - xr[0]) / (xr[1] - xr[0]) * w; },
+      Y: function (v) { return y0 + h - (v - yr[0]) / (yr[1] - yr[0]) * h; },
+      ix: function (px) { return xr[0] + (px - x0) / w * (xr[1] - xr[0]); }
+    };
+  }
+
+  function layout() {
+    var W = Math.max(280, cv.clientWidth || root.clientWidth - 20);
+    // Eine Einheit in y-Richtung ist oben und unten gleich hoch.  Die Hoehe pro Einheit wird so
+    // gewaehlt, dass beide Felder zusammen nicht zu hoch werden (unabhaengig davon, ob unten sichtbar ist).
+    var f = F(), ys = f.yr[1] - f.yr[0], ds = f.dr[1] - f.dr[0];
+    var pxu = Math.min(Math.max(210, W * 0.52) / ys, Math.max(380, Math.min(760, W * 0.95)) / (ys + ds));
+    var topH = Math.round(ys * pxu);
+    var low = S.dq || S.der;
+    var lowH = low ? Math.round(ds * pxu) : 0;
+    var gap = low ? 16 : 0;
+    var v = views();
+    L = { W: W, H: topH + gap + lowH, low: low,
+          top: makePanel(0, 0, W, topH, v.x, v.y),
+          bot: low ? makePanel(0, topH + gap, W, lowH, v.x, v.d) : null };
+    var dpr = window.devicePixelRatio || 1;
+    cv.style.height = L.H + "px";
+    cv.width = Math.round(W * dpr); cv.height = Math.round(L.H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  // Mathematischer Text mit Dach-Unterstuetzung ("x̂")
+  function mathRuns(str) {
+    var runs = [], buf = "";
+    for (var i = 0; i < str.length; i++) {
+      if (str[i + 1] === HAT) { if (buf) runs.push({ t: buf, hat: false }); buf = ""; runs.push({ t: str[i], hat: true }); i++; }
+      else buf += str[i];
+    }
+    if (buf) runs.push({ t: buf, hat: false });
+    return runs;
+  }
+  function mathWidth(str, fs) {
+    ctx.font = "italic " + fs + "px " + MATHFONT;
+    var w = 0; mathRuns(str).forEach(function (r) { w += ctx.measureText(r.t).width; }); return w;
+  }
+  // y = vertikale Mitte des Textes
+  function mathText(str, x, y, align, color, fs, halo) {
+    fs = fs || 16;
+    var w = mathWidth(str, fs);
+    var sx = align === "right" ? x - w : align === "center" ? x - w / 2 : x;
+    var base = y + fs * 0.32;
+    ctx.font = "italic " + fs + "px " + MATHFONT;
+    ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+    var runs = mathRuns(str);
+    if (halo !== false) {
+      ctx.save(); ctx.strokeStyle = "rgba(255,255,255,0.92)"; ctx.lineWidth = 4; ctx.lineJoin = "round";
+      var hx0 = sx; runs.forEach(function (r) { ctx.strokeText(r.t, hx0, base); hx0 += ctx.measureText(r.t).width; });
+      ctx.restore();
+    }
+    ctx.fillStyle = color; ctx.strokeStyle = color;
+    var cx = sx;
+    runs.forEach(function (r) {
+      var rw = ctx.measureText(r.t).width;
+      ctx.fillText(r.t, cx, base);
+      if (r.hat) {
+        var up = r.t !== r.t.toLowerCase();
+        var mid = cx + rw * (up ? 0.6 : 0.55), top = base - fs * (up ? 0.9 : 0.66);
+        ctx.save(); ctx.lineWidth = Math.max(1, fs / 15); ctx.beginPath();
+        ctx.moveTo(mid - fs * 0.17, top + fs * 0.13); ctx.lineTo(mid, top); ctx.lineTo(mid + fs * 0.17, top + fs * 0.13);
+        ctx.stroke(); ctx.restore();
+      }
+      cx += rw;
+    });
+    return w;
+  }
+  function fracText(num, den, x, y, align, color, fs) {
+    fs = fs || 15;
+    var w = Math.max(mathWidth(num, fs), mathWidth(den, fs)) + 6;
+    var cx = align === "right" ? x - w / 2 : align === "left" ? x + w / 2 : x;
+    ctx.save(); ctx.fillStyle = "rgba(255,255,255,0.85)";
+    ctx.fillRect(cx - w / 2 - 2, y - fs * 1.05, w + 4, fs * 2.1); ctx.restore();
+    mathText(num, cx, y - fs * 0.55, "center", color, fs, false);
+    mathText(den, cx, y + fs * 0.6, "center", color, fs, false);
+    ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.beginPath();
+    ctx.moveTo(cx - w / 2, y); ctx.lineTo(cx + w / 2, y); ctx.stroke(); ctx.restore();
+  }
+  function sansText(str, x, y, align, color, fs) {
+    ctx.font = (fs || 12) + "px " + SANS; ctx.fillStyle = color;
+    ctx.textAlign = align; ctx.textBaseline = "middle"; ctx.fillText(str, x, y);
+  }
+
+  function line(x1, y1, x2, y2, color, w, dash) {
+    ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = w || 1;
+    if (dash) ctx.setLineDash(dash);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); ctx.restore();
+  }
+  function dot(x, y, r, fill, stroke) {
+    ctx.save(); ctx.beginPath(); ctx.arc(x, y, r, 0, 2 * Math.PI);
+    if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+    if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1.8; ctx.stroke(); }
+    ctx.restore();
+  }
+  function hole(x, y, color) { dot(x, y, 5, "#ffffff", color); }
+
+  function clip(P) { ctx.save(); ctx.beginPath(); ctx.rect(P.x0, P.y0, P.w, P.h); ctx.clip(); }
+
+  function grid(P, yName) {
+    var sx = nice((P.xr[1] - P.xr[0]) / Math.max(4, P.w / 70));
+    var sy = nice((P.yr[1] - P.yr[0]) / Math.max(3, P.h / 48));
+    var dx = Math.max(0, -Math.floor(Math.log10(sx) + 1e-9)), dy = Math.max(0, -Math.floor(Math.log10(sy) + 1e-9));
+    clip(P);
+    var v;
+    for (v = Math.ceil(P.xr[0] / sx) * sx; v <= P.xr[1]; v += sx) line(P.X(v), P.y0, P.X(v), P.y0 + P.h, COL.grid, 1);
+    for (v = Math.ceil(P.yr[0] / sy) * sy; v <= P.yr[1]; v += sy) line(P.x0, P.Y(v), P.x0 + P.w, P.Y(v), COL.grid, 1);
+    // Achsen
+    var ay = Math.min(Math.max(P.Y(0), P.y0 + 1), P.y0 + P.h - 1), ax = Math.min(Math.max(P.X(0), P.x0 + 1), P.x0 + P.w - 1);
+    var xin = P.Y(0) >= P.y0 && P.Y(0) <= P.y0 + P.h, yin = P.X(0) >= P.x0 && P.X(0) <= P.x0 + P.w;
+    if (xin) { line(P.x0, ay, P.x0 + P.w - 2, ay, COL.axis, 1.2); arrow(P.x0 + P.w - 2, ay, 0); }
+    if (yin) { line(ax, P.y0 + P.h, ax, P.y0 + 2, COL.axis, 1.2); arrow(ax, P.y0 + 2, -Math.PI / 2); }
+    // Beschriftung
+    var ly = xin ? ay + 11 : P.y0 + P.h - 9, lx = yin ? ax - 5 : P.x0 + 4;
+    for (v = Math.ceil(P.xr[0] / sx) * sx; v <= P.xr[1]; v += sx) {
+      if (Math.abs(v) < sx * 1e-6) continue;
+      var X = P.X(v); if (X < P.x0 + 12 || X > P.x0 + P.w - 14) continue;
+      if (xin) line(X, ay - 3, X, ay + 3, COL.axis, 1);
+      sansText(fmt(v, dx), X, ly, "center", COL.tick, 12);
+    }
+    for (v = Math.ceil(P.yr[0] / sy) * sy; v <= P.yr[1]; v += sy) {
+      if (Math.abs(v) < sy * 1e-6) continue;
+      var Yv = P.Y(v); if (Yv < P.y0 + 12 || Yv > P.y0 + P.h - 8) continue;
+      if (yin) line(ax - 3, Yv, ax + 3, Yv, COL.axis, 1);
+      sansText(fmt(v, dy), lx, Yv, yin ? "right" : "left", COL.tick, 12);
+    }
+    if (yName) {
+      if (yName === "y") mathText("y", (yin ? ax : P.x0) + 10, P.y0 + 11, "left", COL.axis, 16);
+      else sansText(yName, (yin ? ax : P.x0) + 8, P.y0 + 11, "left", COL.axis, 13);
+    }
+    ctx.restore();
+    ctx.save(); ctx.strokeStyle = "#cfcfcf"; ctx.lineWidth = 1; ctx.strokeRect(P.x0 + 0.5, P.y0 + 0.5, P.w - 1, P.h - 1); ctx.restore();
+  }
+  function arrow(x, y, ang) {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(ang); ctx.fillStyle = COL.axis;
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-8, -4); ctx.lineTo(-8, 4); ctx.closePath(); ctx.fill(); ctx.restore();
+  }
+
+  // Kurve; breaks: Stellen, an denen nicht verbunden wird (Luecken, Spruenge)
+  function curve(P, g, color, w, breaks, gapPx) {
+    breaks = breaks || []; gapPx = gapPx || 0;
+    clip(P);
+    ctx.strokeStyle = color; ctx.lineWidth = w; ctx.lineJoin = "round"; ctx.lineCap = "round";
+    ctx.beginPath();
+    var pen = false, n = Math.ceil(P.w * 1.5);
+    for (var i = 0; i <= n; i++) {
+      var px = P.x0 + i * P.w / n, v = P.ix(px), skip = false;
+      for (var k = 0; k < breaks.length; k++) if (Math.abs(px - P.X(breaks[k])) < Math.max(gapPx, 0.75)) skip = true;
+      var y = skip ? NaN : g(v);
+      if (!isFinite(y)) { pen = false; continue; }
+      var Y = P.Y(y);
+      if (Y < P.y0 - 4 * P.h) Y = P.y0 - 4 * P.h; if (Y > P.y0 + 5 * P.h) Y = P.y0 + 5 * P.h;
+      if (pen) ctx.lineTo(px, Y); else { ctx.moveTo(px, Y); pen = true; }
+    }
+    ctx.stroke(); ctx.restore();
+  }
+  function fullLine(P, x, y, m, color, w) {
+    clip(P);
+    line(P.X(P.xr[0]), P.Y(y + m * (P.xr[0] - x)), P.X(P.xr[1]), P.Y(y + m * (P.xr[1] - x)), color, w);
+    ctx.restore();
+  }
+
+  // Markierungen x und x-Dach auf der waagrechten Achse
+  function axisMark(P, v, str, color, above) {
+    var ay = P.Y(0); if (ay < P.y0 || ay > P.y0 + P.h) ay = P.y0 + P.h - 1;
+    var X = P.X(v);
+    if (X < P.x0 || X > P.x0 + P.w) return;
+    line(X, ay - 5, X, ay + 5, color, 2);
+    var yy = above ? ay - 15 : ay + 17; if (yy > P.y0 + P.h - 9) yy = ay - 15;
+    var w = mathWidth(str, 17);
+    ctx.save(); ctx.fillStyle = "rgba(255,255,255,0.95)"; ctx.fillRect(X - w / 2 - 4, yy - 10, w + 8, 21); ctx.restore();
+    mathText(str, X, yy, "center", color, 17, false);
+  }
+  function guideToAxis(P, v, y, color) {
+    var ay = P.Y(0); if (ay < P.y0 || ay > P.y0 + P.h) ay = P.y0 + P.h;
+    clip(P); line(P.X(v), P.Y(y), P.X(v), ay, color, 1, [4, 4]); ctx.restore();
+  }
+
+  // ------------------------------------------------------------------
+  function draw() {
+    layout();
+    var f = F(), T = L.top, x = S.x, y = f.f(x), tan = S.sec && isTan(), nd = ndAt(x);
+    var showXh = useXh() && !tan, xh = S.xh, yh = f.f(xh);
+    ctx.clearRect(0, 0, L.W, L.H);
+
+    // ---------------- oben ----------------
+    grid(T, "y");
+    guideToAxis(T, x, y, COL.guide);
+    if (showXh && S.sec) guideToAxis(T, xh, yh, "rgba(225,120,0,0.6)");
+    curve(T, f.f, COL.f, 2.3);
+
+    var lineInfo = null;
+    if (S.sec) {
+      if (!tan) { lineInfo = { m: dq(xh), color: COL.sek }; }
+      else if (!nd) { lineInfo = { m: f.d(x), color: COL.tan }; }
+      if (lineInfo) fullLine(T, x, y, lineInfo.m, lineInfo.color, 2.1);
+    }
+    // feste Tangente in P (unabhaengig von der Sekante)
+    var tanP = S.tanP && !nd && !(S.sec && tan);
+    if (tanP) fullLine(T, x, y, f.d(x), COL.tan, 2.1);
+
+    // Schritt der Laenge 1: senkrechte Strecke der Laenge m, dann 1 nach rechts
+    // Schritt der Laenge 1 ab dem Punkt (bx | by)
+    var stepOne = function (bx, by, m, label) {
+      line(T.X(bx), T.Y(by), T.X(bx), T.Y(by + m), COL.stg, 2.4);
+      line(T.X(bx), T.Y(by + m), T.X(bx + 1), T.Y(by + m), COL.stg, 2.4);
+      mathText("1", (T.X(bx) + T.X(bx + 1)) / 2, T.Y(by + m) + (m >= 0 ? 12 : -12), "center", COL.stg, 15);
+      if (label) label((T.Y(by) + T.Y(by + m)) / 2, Math.abs(T.Y(by) - T.Y(by + m)) >= 14, T.X(bx));
+    };
+
+    var secTri = S.sec && S.slopeS && lineInfo;
+    if (secTri) {
+      clip(T);
+      if (S.smode === "delta" && !tan) {
+        // senkrecht von P bis auf Hoehe f(x^), dann waagrecht bis P^
+        line(T.X(x), T.Y(y), T.X(x), T.Y(yh), COL.stg, 2.4);
+        line(T.X(x), T.Y(yh), T.X(xh), T.Y(yh), COL.stg, 2.4);
+        var vside = xh > x ? "right" : "left";
+        var lx = xh > x ? T.X(x) - 7 : T.X(x) + 7;
+        if (Math.abs(T.Y(y) - T.Y(yh)) > 14) mathText("f(" + XH + ") − f(x)", lx, (T.Y(y) + T.Y(yh)) / 2, vside, COL.stg, 15);
+        if (Math.abs(T.X(x) - T.X(xh)) > 30) mathText(XH + " − x", (T.X(x) + T.X(xh)) / 2, T.Y(yh) + (yh >= y ? -13 : 13), "center", COL.stg, 15);
+      } else {
+        // ab P^, damit die senkrechte Strecke genau ueber dem Differenzenquotienten unten liegt
+        stepOne(xh, yh, lineInfo.m, function (mid, room, X) {
+          if (!room) return;
+          if (tan) mathText("f′(x)", X - 7, mid, "right", COL.stg, 15);
+          else fracText("f(" + XH + ") − f(x)", XH + " − x", X - 7, mid, "right", COL.stg, 13);
+        });
+      }
+      ctx.restore();
+    }
+    if (tanP && S.slopeT) {
+      clip(T);
+      var mt = f.d(x);
+      var crowded = secTri && (S.smode === "delta" || Math.abs(T.X(xh) - T.X(x)) < 90);
+      stepOne(x, y, mt, function (mid, room) {
+        // liegt das Sekantendreieck nahe, kommt die Beschriftung rechts ans Ende des Schritts
+        if (crowded) {
+          if (T.X(x + 1) + 60 < T.x0 + T.w) mathText("f′(x)", T.X(x + 1) + 7, T.Y(y + mt), "left", COL.stg, 15);
+          else mathText("f′(x)", T.X(x) - 7, T.Y(y + mt), "right", COL.stg, 15);
+        }
+        else if (room) mathText("f′(x)", T.X(x) - 7, mid, "right", COL.stg, 15);
+      });
+      ctx.restore();
+    }
+
+    // Punkte oben
+    clip(T);
+    if (showXh && S.sec) {
+      dot(T.X(xh), T.Y(yh), 5, COL.sek);
+      mathText("P" + HAT, T.X(xh) + 8, T.Y(yh) + 12, "left", COL.sek, 16);
+    }
+    dot(T.X(x), T.Y(y), 5, COL.f);
+    mathText("P", T.X(x) + 8, T.Y(y) + 12, "left", COL.f, 16);
+    ctx.restore();
+    if (showXh) {
+      var close = Math.abs(T.X(xh) - T.X(x)) < 18;
+      axisMark(T, xh, XH, COL.sek, close);
+    }
+    axisMark(T, x, "x", COL.f, false);
+
+    // ---------------- unten ----------------
+    if (L.low) {
+      var B = L.bot;
+      grid(B, "Steigung");
+      clip(B);
+      line(B.X(x), B.y0, B.X(x), B.y0 + B.h, "rgba(0,0,0,0.25)", 1, [4, 4]);
+      if (S.sec && S.dq && !tan) line(B.X(xh), B.y0, B.X(xh), B.y0 + B.h, "rgba(225,120,0,0.45)", 1, [4, 4]);
+      ctx.restore();
+
+      var NDs = f.nd || [], eps = 1e-9;
+      if (S.der) {
+        curve(B, f.d, COL.abl, 2.5, NDs, 5);
+        NDs.forEach(function (p) { hole(B.X(p), B.Y(f.d(p - eps)), COL.abl); hole(B.X(p), B.Y(f.d(p + eps)), COL.abl); });
+      }
+      if (S.dq) {
+        curve(B, dq, COL.sek, 2.5, [x], 6);
+      }
+      clip(B);
+
+      var dval = f.d(x);
+      // Ablesehilfe: Steigung der Tangente = y-Wert von f′ an der Stelle x
+      if (S.der && !nd && (S.tanP || tan)) line(B.X(x), B.Y(dval), Math.max(B.X(0), B.x0), B.Y(dval), COL.guide, 1, [4, 4]);
+      if (S.dq) {
+        if (nd) {
+          hole(B.X(x), B.Y(dq(x - eps * Math.max(1, Math.abs(x)))), COL.sek);
+          hole(B.X(x), B.Y(dq(x + eps * Math.max(1, Math.abs(x)))), COL.sek);
+        } else if (tan) {
+          line(B.X(x), B.Y(dval), B.X(x), B.Y(0), COL.guide, 1, [4, 4]);
+          line(B.X(x), B.Y(dval), B.X(0), B.Y(dval), COL.guide, 1, [4, 4]);
+          dot(B.X(x), B.Y(dval), 5.5, COL.stg);
+        } else {
+          hole(B.X(x), B.Y(dval), COL.sek);
+          if (S.der) dot(B.X(x), B.Y(dval), 2.6, COL.abl);
+          if (S.sec) dot(B.X(xh), B.Y(dq(xh)), 5, COL.sek);
+        }
+      } else if (S.der && !nd) {
+        dot(B.X(x), B.Y(dval), 5, COL.abl);
+      }
+      ctx.restore();
+    }
+
+    updateHTML();
+  }
+
+  // ------------------------------------------------------------------
+  // HTML-Teile
+  function updateHTML() {
+    var f = F(), tan = S.sec && isTan(), nd = ndAt(S.x);
+    $("tf").innerHTML = "<i>f</i>(<i>x</i>) = " + f.ft;
+    $("td").innerHTML = "<i>f</i>′(<i>x</i>) = " + f.dt;
+    // x-Dach-Zeile
+    $("xhrow").classList.toggle("hidden", !useXh());
+    $("btnrow").classList.toggle("hidden", !useXh());
+    $("eq").setAttribute("aria-pressed", isTan() ? "true" : "false");
+    $("anim").disabled = isTan(); $("anim").style.opacity = isTan() ? 0.45 : 1;
+    // Steigung nur mit Gerade
+    $("slopes").disabled = !S.sec; $("slopesl").classList.toggle("off", !S.sec);
+    $("slopet").disabled = !S.tanP; $("slopetl").classList.toggle("off", !S.tanP);
+    var sm = root.querySelectorAll('input[name="abl-sm"]');
+    for (var i = 0; i < sm.length; i++) { sm[i].disabled = !(S.sec && S.slopeS); sm[i].parentNode.style.opacity = (S.sec && S.slopeS) ? 1 : 0.45; }
+    // Regler
+    $("xv").textContent = fmt(S.x, decs());
+    $("xhv").textContent = fmt(S.xh, decs());
+    $("x").value = S.x; $("xh").value = S.xh;
+    $("zoomv").textContent = "×" + (S.zoom < 10 ? fmt(S.zoom, 1) : Math.round(S.zoom));
+
+    // Status
+    var st = $("status"), msg = "", cls = "status";
+    if (useXh() && tan) {
+      if (nd) {
+        msg = '<span class="m">' + hx + " = <i>x</i></span>: An der Stelle <span class=\"m\"><i>x</i> = " + fmt(S.x) +
+              "</span> hat der Graph keine Tangente. Die Lücke des Differenzenquotienten lässt sich nicht stetig schliessen, also existiert <span class=\"m\"><i>f</i>′(" + fmt(S.x) + ")</span> nicht.";
+        cls += " warn";
+      } else {
+        msg = '<span class="m">' + hx + " = <i>x</i></span>: " +
+              (S.sec ? "Aus der Sekante ist die <b>Tangente</b> in <span class=\"m\"><i>P</i></span> geworden. " : "") +
+              (S.dq ? "Der Wert, der die Lücke des Differenzenquotienten stetig schliesst, ist <span class=\"m\"><i>f</i>′(<i>x</i>)</span>." : "");
+        if (S.sec && S.slopeS && S.smode === "delta") msg += " Für <span class=\"m\">" + hx + " = <i>x</i></span> gibt es kein Dreieck bis " + hx + "; gezeigt ist der Schritt der Länge 1.";
+        cls += " ok";
+      }
+    } else if (nd && (S.der || S.tanP)) {
+      msg = "An der Stelle <span class=\"m\"><i>x</i> = " + fmt(S.x) + "</span> hat der Graph keine Tangente, <span class=\"m\"><i>f</i>′(" + fmt(S.x) + ")</span> existiert nicht.";
+      cls += " warn";
+    }
+    st.innerHTML = msg; st.className = cls;
+
+    // Werte
+    $("valp").classList.toggle("hidden", !S.vals);
+    if (S.vals) {
+      var d = decs(), fx = f.f(S.x), rows = [];
+      var cell = function (k, v) { rows.push('<span class="k m">' + k + "</span><span>" + v + "</span>"); };
+      cell("<i>x</i> =", fmt(S.x, d)); cell("<i>f</i>(<i>x</i>) =", fmt(fx, d));
+      if (useXh()) {
+        var fxh = f.f(S.xh);
+        cell(hx + " =", fmt(S.xh, d)); cell("<i>f</i>(" + hx + ") =", fmt(fxh, d));
+        cell(hx + " − <i>x</i> =", fmt(S.xh - S.x, d)); cell("<i>f</i>(" + hx + ") − <i>f</i>(<i>x</i>) =", fmt(fxh - fx, d));
+        cell("Differenzenquotient =", tan ? "nicht definiert für " + '<span class="m">' + hx + " = <i>x</i></span>" : fmt(dq(S.xh), Math.max(4, d)));
+      }
+      var showD = S.der || S.tanP || (useXh() && tan);
+      if (showD) cell("<i>f</i>′(<i>x</i>) =", nd ? "existiert nicht" : fmt(f.d(S.x), 4));
+      $("vals-out").innerHTML = rows.join("");
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // Zustand aendern
+  function setX(v) {
+    var f = F();
+    v = Math.min(Math.max(v, f.sr[0]), f.sr[1]);
+    S.x = v; if (S.lock) S.xh = v;
+  }
+  function setXh(v) {
+    var f = F();
+    S.xh = Math.min(Math.max(v, f.sr[0]), f.sr[1]);
+    S.lock = (S.xh === S.x);
+  }
+  function round(v) {
+    var span = L ? L.top.xr[1] - L.top.xr[0] : 5;
+    var r = Math.pow(10, Math.floor(Math.log10(span)) - 3);
+    return Math.round(v / r) * r;
+  }
+
+  function loadFun(i) {
+    stopAnim();
+    S.fi = i; var f = F();
+    S.x = f.x; S.xh = f.xh; S.zoom = 1; S.lock = false; S.prevXh = undefined;
+    $("zoom").value = 0;
+    ["x", "xh"].forEach(function (k) { $(k).min = f.sr[0]; $(k).max = f.sr[1]; });
+    draw();
+  }
+
+  // ------------------------------------------------------------------
+  // Animation x^ -> x
+  var anim = null;
+  function stopAnim() { if (anim) { cancelAnimationFrame(anim.id); anim = null; } }
+  function startAnim() {
+    stopAnim();
+    if (isTan()) return;
+    var d0 = S.xh - S.x, T = 2600, PAUSE = 500, t0 = null;
+    S.prevXh = S.xh;
+    anim = {};
+    var step = function (ts) {
+      if (t0 === null) t0 = ts;
+      var t = (ts - t0) / T;
+      if (t < 1) S.xh = S.x + d0 * Math.pow(1e-4, t);
+      else if (t < 1 + PAUSE / T) S.xh = S.x + d0 * 1e-4;
+      else { S.xh = S.x; S.lock = true; draw(); anim = null; return; }
+      draw(); anim.id = requestAnimationFrame(step);
+    };
+    anim.id = requestAnimationFrame(step);
+  }
+
+  // ------------------------------------------------------------------
+  // Ziehen mit Maus / Finger
+  var drag = null;
+  function handles() {
+    var f = F(), H = [], T = L.top, tan = S.sec && isTan();
+    H.push({ k: "x", px: T.X(S.x), py: T.Y(f.f(S.x)) });
+    if (S.sec && !tan) H.push({ k: "xh", px: T.X(S.xh), py: T.Y(f.f(S.xh)) });
+    if (L.low) {
+      var B = L.bot;
+      if (S.der && !ndAt(S.x)) H.push({ k: "x", px: B.X(S.x), py: B.Y(f.d(S.x)) });
+      if (S.sec && S.dq && !tan) H.push({ k: "xh", px: B.X(S.xh), py: B.Y(dq(S.xh)) });
+    }
+    return H;
+  }
+  function pick(mx, my) {
+    var best = null, bd = 24;
+    handles().forEach(function (h) { var d = Math.hypot(h.px - mx, h.py - my); if (d < bd) { bd = d; best = h; } });
+    return best;
+  }
+  function mpos(e) { var r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+
+  cv.addEventListener("pointerdown", function (e) {
+    var p = mpos(e), h = pick(p.x, p.y);
+    if (!h) return;
+    stopAnim();
+    drag = { k: h.k };
+    cv.setPointerCapture(e.pointerId); e.preventDefault();
+  });
+  cv.addEventListener("pointermove", function (e) {
+    var p = mpos(e);
+    if (!drag) { cv.style.cursor = pick(p.x, p.y) ? "grab" : "default"; return; }
+    cv.style.cursor = "grabbing";
+    var v = round(L.top.ix(p.x));
+    if (drag.k === "x") setX(v);
+    else {
+      if (Math.abs(L.top.X(v) - L.top.X(S.x)) < 8) v = S.x;   // einrasten: Tangente
+      setXh(v);
+    }
+    draw();
+  });
+  var endDrag = function () { drag = null; cv.style.cursor = "default"; };
+  cv.addEventListener("pointerup", endDrag);
+  cv.addEventListener("pointercancel", endDrag);
+
+  // ------------------------------------------------------------------
+  // Bedienelemente
+  FUNS.forEach(function (f, i) { var o = document.createElement("option"); o.value = i; o.textContent = f.name; $("fun").appendChild(o); });
+  $("fun").value = S.fi;
+  $("fun").addEventListener("change", function () { loadFun(+this.value); });
+
+  $("x").addEventListener("input", function () { stopAnim(); setX(parseFloat(this.value)); draw(); });
+  $("xh").addEventListener("input", function () {
+    stopAnim(); var v = parseFloat(this.value);
+    if (Math.abs(v - S.x) < 0.005) v = S.x;
+    setXh(v); draw();
+  });
+  $("zoom").addEventListener("input", function () { S.zoom = Math.pow(10, parseFloat(this.value)); draw(); });
+  $("anim").addEventListener("click", startAnim);
+  // Umschalter: x^ = x setzen, nochmaliges Klicken stellt das vorherige x^ wieder her
+  $("eq").addEventListener("click", function () {
+    stopAnim();
+    if (!isTan()) { S.prevXh = S.xh; S.xh = S.x; S.lock = true; }
+    else {
+      var f = F(), v = S.prevXh;
+      if (v === undefined || v === S.x) v = S.x + 0.5 <= f.sr[1] ? S.x + 0.5 : S.x - 0.5;
+      setXh(v);
+    }
+    draw();
+  });
+
+  var bind = function (id, key, after) {
+    var el = $(id); el.checked = S[key];
+    el.addEventListener("change", function () { S[key] = this.checked; if (after) after(); draw(); });
+  };
+  bind("sec", "sec"); bind("tanp", "tanP"); bind("slopes", "slopeS"); bind("slopet", "slopeT"); bind("dq", "dq"); bind("der", "der");
+  bind("vals", "vals");
+  var sm = root.querySelectorAll('input[name="abl-sm"]');
+  for (var i = 0; i < sm.length; i++) sm[i].addEventListener("change", function () { S.smode = this.value; draw(); });
+
+  if (window.ResizeObserver) new ResizeObserver(function () { if (!drag && !anim) draw(); }).observe(root);
+  else window.addEventListener("resize", draw);
+
+  loadFun(S.fi);
+})();
+</script>
+</body>
+</html>
