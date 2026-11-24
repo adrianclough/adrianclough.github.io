@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="de-CH">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stetigkeits-Explorer</title>
+<style>
+#stg {
+  --f:#C82323; --del:#E18C0F; --eps:#1450B9; --out:#111111; --dark:#23373B; --ok:#007D3E;
+  font-family:"Fira Sans","Segoe UI",system-ui,-apple-system,Helvetica,Arial,sans-serif;
+  color:#1a1a1a; max-width:900px; margin:0 auto; padding:10px; box-sizing:border-box; font-size:15px; line-height:1.35;
+}
+#stg *, #stg *::before, #stg *::after { box-sizing:border-box; }
+#stg .bar { background:var(--dark); color:#fff; padding:9px 14px; display:flex; flex-wrap:wrap; gap:8px 18px; align-items:center; }
+#stg .bar h2 { font-size:17px; font-weight:500; margin:0; flex:1 1 auto; }
+#stg .bar label { font-size:14px; }
+#stg select { font:inherit; font-size:14px; padding:3px 6px; border-radius:3px; border:1px solid #9aa; max-width:100%; }
+#stg .terms { padding:8px 2px 4px; font-size:18px; }
+#stg .tx { font-family:"Fira Sans","Segoe UI",system-ui,sans-serif; font-size:0.85em; }
+#stg canvas { display:block; width:100%; touch-action:pan-y; user-select:none; -webkit-user-select:none; }
+#stg .m { font-family:"Latin Modern Math","STIX Two Math","Cambria Math","Times New Roman",serif; font-size:1.08em; white-space:nowrap; }
+#stg .m i { font-style:italic; }
+#stg .fr { display:inline-flex; flex-direction:column; vertical-align:middle; text-align:center; font-size:0.8em; margin:0 0.1em; }
+#stg .fr > span:first-child { border-bottom:1px solid currentColor; padding:0 0.15em; }
+#stg .status { min-height:22px; margin:6px 2px; font-size:14px; }
+#stg .status.warn { color:var(--out); font-weight:500; }
+#stg .status.ok { color:var(--ok); }
+#stg .panel { border-top:1px solid #ddd; padding:8px 2px; }
+#stg .row { display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px; margin:6px 0; }
+#stg .row .lab { width:2.2em; text-align:right; font-size:18px; }
+#stg input[type=range] { flex:1 1 220px; min-width:140px; }
+#stg .val { min-width:6em; font-variant-numeric:tabular-nums; display:flex; align-items:center; gap:0.3em; }
+#stg .num { font:inherit; font-family:"Fira Sans","Segoe UI",system-ui,sans-serif; font-size:16px; font-variant-numeric:tabular-nums; width:6.5em; padding:3px 6px; border:1px solid #b5b5b5; border-radius:3px; background:#fff; color:#1a1a1a; }
+#stg .num:focus { outline:2px solid #1450B9; outline-offset:0; border-color:#1450B9; }
+#stg .num.bad { border-color:#C82323; background:#fff3f3; }
+#stg .toggles { display:flex; flex-wrap:wrap; gap:6px 28px; }
+#stg .toggles label { display:flex; align-items:center; gap:7px; cursor:pointer; }
+#stg .sw { display:inline-block; width:22px; height:12px; flex:0 0 auto; border-radius:2px; }
+#stg .vals { display:grid; grid-template-columns:auto auto; gap:2px 14px; font-variant-numeric:tabular-nums; justify-content:start; font-size:15px; }
+#stg .vals .k { text-align:right; }
+#stg .hidden { display:none !important; }
+#stg .note { font-size:13px; color:#555; margin:6px 2px 0; }
+</style>
+</head>
+<body>
+
+<div id="stg">
+  <div class="bar">
+    <h2>Stetigkeits-Explorer</h2>
+    <label>Funktion
+      <select id="stg-fun"></select>
+    </label>
+  </div>
+
+  <div class="terms"><span id="stg-tf" class="m"></span></div>
+
+  <canvas id="stg-cv"></canvas>
+
+  <div id="stg-status" class="status"></div>
+
+  <div class="panel">
+    <div class="row">
+      <span class="lab m" style="color:var(--del)"><i>δ</i></span>
+      <input id="stg-d" type="range" min="0" max="1000" step="1" value="0">
+      <span class="val m"><i>δ</i> = <input id="stg-dv" class="num" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" aria-label="δ eingeben"></span>
+    </div>
+    <div id="stg-epsrows" class="hidden">
+      <div class="row">
+        <span class="lab m" style="color:var(--eps)"><i>ε</i></span>
+        <input id="stg-e" type="range" min="0" max="1000" step="1" value="0">
+        <span class="val m"><i>ε</i> = <input id="stg-ev" class="num" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" aria-label="ε eingeben"></span>
+      </div>
+      <div class="row">
+        <span class="lab m" style="color:var(--eps)"><i>ℓ</i></span>
+        <input id="stg-l" type="range" min="0" max="1000" step="1" value="500">
+        <span class="val m"><i>ℓ</i> = <input id="stg-lv" class="num" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" aria-label="ℓ eingeben"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel toggles">
+    <label><input type="checkbox" id="stg-zoom" checked>Zoom auf den <span class="m"><i>δ</i></span>-Bereich</label>
+    <label><input type="checkbox" id="stg-fa" checked><span class="sw" style="background:var(--f)"></span>Wert <span class="m"><i>f</i>(<i>a</i>)</span> zeigen</label>
+    <label><input type="checkbox" id="stg-eps"><span class="sw" style="background:rgba(20,80,185,0.25)"></span><span class="m"><i>ε</i></span>-Bereich um <span class="m"><i>ℓ</i></span></label>
+    <label><input type="checkbox" id="stg-vals">Werte anzeigen</label>
+  </div>
+
+  <div class="panel hidden" id="stg-valp">
+    <div class="vals" id="stg-vals-out"></div>
+  </div>
+
+  <div class="note">Die Werte von <span class="m"><i>δ</i></span>, <span class="m"><i>ε</i></span> und <span class="m"><i>ℓ</i></span> kannst du auch direkt eintippen (Eingabetaste). Erlaubt sind
+  <span class="m">0,0005 ≤ <i>δ</i> ≤ 1</span> und <span class="m">0,001 ≤ <i>ε</i> ≤ 2</span>.</div>
+  <div class="note">Alice hat die Stelle <span class="m"><i>a</i></span> entfernt. Der Schatten links zeigt die Werte
+  <span class="m"><i>f</i>(<i>x</i>)</span> für alle <span class="m"><i>x</i></span> aus
+  <span class="m"><i>D<sub>f</sub></i> ∖ {<i>a</i>}</span> im <span class="m"><i>δ</i></span>-Bereich um <span class="m"><i>a</i></span>.</div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var root = document.getElementById("stg");
+  var $ = function (id) { return document.getElementById("stg-" + id); };
+
+  var COL = { f: "#C82323", del: "rgba(225,140,15,0.22)", delLine: "#C9790A", eps: "rgba(20,80,185,0.16)",
+              epsLine: "#1450B9", out: "#111111", grid: "#e4e4e4", axis: "#333333", tick: "#666666", rail: "#9a9a9a" };
+  var MATHFONT = '"Latin Modern Math","STIX Two Math","Cambria Math","Times New Roman",serif';
+  var SANS = '"Fira Sans","Segoe UI",system-ui,-apple-system,Helvetica,Arial,sans-serif';
+  var fr = function (a, b) { return '<span class="fr"><span>' + a + "</span><span>" + b + "</span></span>"; };
+  var fuer = ' <span class="tx">für</span> ';
+
+  // ------------------------------------------------------------------
+  // Hilfsfunktionen fuer die Treppen
+  function stepIndex(t) { return Math.floor(-Math.log2(t) - 1e-12); }        // 2^{-n-1} < t <= 2^{-n}
+  function treppe(x) { if (x === 0) return 0; var t = Math.abs(x), n = stepIndex(t); return Math.sign(x) * Math.pow(2, -n); }
+  function alt(x) { if (x === 0) return 0; var t = Math.abs(x), n = stepIndex(t); return Math.sign(x) * (n % 2 === 0 ? 1 : -1); }
+  // Muenzwurf, fest fuer jede Stelle
+  function coin(x) { var s = Math.sin(x * 12.9898 + 78.233) * 43758.5453; return (s - Math.floor(s)) < 0.5; }
+  function gfun(x) { return coin(x) ? x : -x; }
+
+  // ------------------------------------------------------------------
+  // Funktionen.  dom: offenes Intervall des Definitionsbereichs (ohne Luecken),
+  // lim: Wert in der Luecke (null, falls keiner), fa: f(a) (undefined, falls a nicht in D_f),
+  // xr/yr: Grundfenster, kind: Art der Zeichnung, br: Sprungstellen, holes: offene Kreise.
+  var FUNS = [
+    { name: "Beispiel aus Abschnitt 5", ft: "<i>f</i>(<i>x</i>) = 1 + 0,8<i>x</i> + 0,3<i>x</i><sup>2</sup>,&nbsp; <i>a</i> = 0",
+      f: function (x) { return 1 + 0.8 * x + 0.3 * x * x; }, a: 0, dom: [-Infinity, Infinity], lim: 1, fa: 1,
+      xr: [-1.3, 1.3], yr: [-0.2, 2.6], kind: "smooth" },
+    { name: "f₁: konstant", ft: "<i>f</i><sub>1</sub>(<i>x</i>) = " + fr("1", "2") + ",&nbsp; <i>a</i> = 0",
+      f: function () { return 0.5; }, a: 0, dom: [-1, 1], lim: 0.5, fa: 0.5, xr: [-1.1, 1.1], yr: [-0.6, 1.4], kind: "smooth" },
+    { name: "f₂: Parabel", ft: "<i>f</i><sub>2</sub>(<i>x</i>) = <i>x</i><sup>2</sup>,&nbsp; <i>a</i> = 0",
+      f: function (x) { return x * x; }, a: 0, dom: [-1, 1], lim: 0, fa: 0, xr: [-1.1, 1.1], yr: [-0.4, 1.2], kind: "smooth" },
+    { name: "f₃: Sprung", ft: "<i>f</i><sub>3</sub>(<i>x</i>) = 2<i>x</i>" + fuer + "<i>x</i> &lt; 0,&nbsp; 2<i>x</i> + 1" + fuer + "<i>x</i> ≥ 0,&nbsp; <i>a</i> = 0",
+      f: function (x) { return x < 0 ? 2 * x : 2 * x + 1; }, a: 0, dom: [-1, 1], lim: null, fa: 1,
+      xr: [-1.1, 1.1], yr: [-2.2, 3.2], kind: "smooth", br: [0], holes: [[0, 0], [0, 1]] },
+    { name: "f₄: versetzter Punkt", ft: "<i>f</i><sub>4</sub>(<i>x</i>) = <i>x</i><sup>2</sup>" + fuer + "<i>x</i> ≠ 0,&nbsp; <i>f</i><sub>4</sub>(0) = 1,&nbsp; <i>a</i> = 0",
+      f: function (x) { return x === 0 ? 1 : x * x; }, a: 0, dom: [-1, 1], lim: 0, fa: 1, xr: [-1.1, 1.1], yr: [-0.4, 1.4], kind: "smooth" },
+    { name: "f₅: Treppe", ft: "<i>f</i><sub>5</sub>(<i>x</i>) = 2<sup>−<i>n</i></sup>" + fuer + "2<sup>−<i>n</i>−1</sup> &lt; <i>x</i> ≤ 2<sup>−<i>n</i></sup>,&nbsp; <i>f</i><sub>5</sub>(−<i>x</i>) = −<i>f</i><sub>5</sub>(<i>x</i>),&nbsp; <i>f</i><sub>5</sub>(0) = 0,&nbsp; <i>a</i> = 0",
+      f: treppe, a: 0, dom: [-1, 1], lim: 0, fa: 0, xr: [-1.1, 1.1], yr: [-1.3, 1.3], kind: "stairs", h: function (n) { return Math.pow(2, -n); } },
+    { name: "f₆: alternierende Treppe", ft: "<i>f</i><sub>6</sub>(<i>x</i>) = (−1)<sup><i>n</i></sup>" + fuer + "2<sup>−<i>n</i>−1</sup> &lt; <i>x</i> ≤ 2<sup>−<i>n</i></sup>,&nbsp; <i>f</i><sub>6</sub>(−<i>x</i>) = −<i>f</i><sub>6</sub>(<i>x</i>),&nbsp; <i>f</i><sub>6</sub>(0) = 0,&nbsp; <i>a</i> = 0",
+      f: alt, a: 0, dom: [-1, 1], lim: null, fa: 0, xr: [-1.1, 1.1], yr: [-1.5, 1.5], kind: "stairs", h: function (n) { return n % 2 === 0 ? 1 : -1; } },
+    { name: "h = 1 + f₅", ft: "<i>h</i>(<i>x</i>) = 1 + <i>f</i><sub>5</sub>(<i>x</i>)" + fuer + "<i>x</i> ≠ 0,&nbsp; <i>h</i>(0) = 0,&nbsp; <i>a</i> = 0",
+      f: function (x) { return x === 0 ? 0 : 1 + treppe(x); }, a: 0, dom: [-1, 1], lim: 1, fa: 0, xr: [-1.1, 1.1], yr: [-0.3, 2.3],
+      kind: "stairs", h: function (n) { return Math.pow(2, -n); }, shift: 1 },
+    { name: "g: Münzwurf, Lücke bei 0", ft: "<i>g</i>(<i>x</i>) = <i>x</i> <span class=\"tx\">oder</span> −<i>x</i> <span class=\"tx\">(Münzwurf)</span>,&nbsp; <i>a</i> = 0 <span class=\"tx\">(nicht definiert)</span>",
+      f: gfun, a: 0, dom: [-Infinity, Infinity], lim: 0, fa: undefined, xr: [-2.1, 2.1], yr: [-2.1, 2.1], kind: "cloud" },
+    { name: "g: Münzwurf an der Stelle 1", ft: "<i>g</i>(<i>x</i>) = <i>x</i> <span class=\"tx\">oder</span> −<i>x</i> <span class=\"tx\">(Münzwurf)</span>,&nbsp; <i>g</i>(1) = 1,&nbsp; <i>a</i> = 1",
+      f: function (x) { return x === 1 ? 1 : gfun(x); }, a: 1, dom: [-Infinity, Infinity], lim: null, fa: 1, excl: [0],
+      xr: [-0.4, 2.4], yr: [-2.6, 2.6], kind: "cloud" }
+  ];
+
+  var S = { fi: 0, d: 0.8, e: 0.5, l: 1, zoom: true, showFa: true, eps: false, vals: false };
+  var F = function () { return FUNS[S.fi]; };
+  var DMIN = 0.0005;
+
+  function inDom(f, x) {
+    if (!(x > f.dom[0] && x < f.dom[1])) return false;
+    if (f.excl) for (var i = 0; i < f.excl.length; i++) if (x === f.excl[i]) return false;
+    return true;
+  }
+  function dMax() { var f = F(); return Math.min(1, (f.xr[1] - f.xr[0]) / 2); }
+
+  // ------------------------------------------------------------------
+  // Zahlen
+  function fmt(v, d) {
+    if (!isFinite(v)) return "–";
+    if (d === undefined) d = 3;
+    var s = v.toFixed(d);
+    if (s.indexOf(".") >= 0) s = s.replace(/0+$/, "").replace(/\.$/, "");
+    if (s === "-0") s = "0";
+    return s.replace("-", "−").replace(".", ",");
+  }
+  function decsFor(v) { return v >= 0.1 ? 2 : Math.min(6, Math.ceil(-Math.log10(v)) + 1); }
+  function nice(raw) {
+    var p = Math.pow(10, Math.floor(Math.log10(raw))), m = raw / p;
+    return (m < 1.5 ? 1 : m < 3 ? 2 : m < 7 ? 5 : 10) * p;
+  }
+  // Schieberegler 0..1000 <-> log-Skala
+  function toLog(v, lo, hi) { return Math.pow(10, Math.log10(hi) - v / 1000 * (Math.log10(hi) - Math.log10(lo))); }
+  function fromLog(x, lo, hi) { return Math.round((Math.log10(hi) - Math.log10(x)) / (Math.log10(hi) - Math.log10(lo)) * 1000); }
+
+  // ------------------------------------------------------------------
+  // Schatten: Werte f(x) fuer x in D_f \ {a} im delta-Bereich
+  function shadow() {
+    var f = F(), a = f.a, d = S.d, vals = [], i, x;
+    var N = 2400;
+    for (i = 1; i < N; i++) {
+      x = a - d + 2 * d * i / N;
+      if (x !== a && inDom(f, x)) vals.push(f.f(x));
+    }
+    // dichter bei a, damit auch kleine Treppenstufen erfasst werden
+    for (i = 0; i < 260; i++) {
+      var t = d * Math.pow(0.95, i);
+      [a - t * 0.999, a + t * 0.999, a - t * 0.6, a + t * 0.6].forEach(function (xx) { if (xx !== a && inDom(f, xx)) vals.push(f.f(xx)); });
+    }
+    var lo = Infinity, hi = -Infinity;
+    vals.forEach(function (v) { if (v < lo) lo = v; if (v > hi) hi = v; });
+    return { vals: vals, lo: lo, hi: hi };
+  }
+  function inBand(v) { return Math.abs(v - S.l) < S.e; }
+
+  // ------------------------------------------------------------------
+  // Zeichenflaeche
+  var cv = $("cv"), ctx = cv.getContext("2d");
+  var L = null, SH = null;
+  var RAILW = 74;
+
+  function views() {
+    var f = F(), a = f.a;
+    var xr = f.xr.slice(), yr = f.yr.slice();
+    if (S.zoom) {
+      var w = Math.min(Math.max(2.6 * S.d, 0.0012), (f.xr[1] - f.xr[0]) / 2);
+      xr = [a - w, a + w];
+      if (xr[0] < f.xr[0]) xr = [f.xr[0], f.xr[0] + 2 * w];
+      if (xr[1] > f.xr[1]) xr = [f.xr[1] - 2 * w, f.xr[1]];
+      var lo = SH.lo, hi = SH.hi;
+      if (f.lim !== null) { lo = Math.min(lo, f.lim); hi = Math.max(hi, f.lim); }
+      if (S.eps) { lo = Math.min(lo, S.l - S.e); hi = Math.max(hi, S.l + S.e); }
+      var span = Math.max(hi - lo, 1.2 * w * 0.5, 0.002);
+      var mid = (lo + hi) / 2;
+      yr = [mid - span * 0.68, mid + span * 0.68];
+      if (yr[1] - yr[0] > f.yr[1] - f.yr[0]) yr = f.yr.slice();
+    }
+    return { x: xr, y: yr };
+  }
+
+  function makePanel(x0, y0, w, h, xr, yr) {
+    return {
+      x0: x0, y0: y0, w: w, h: h, xr: xr, yr: yr,
+      X: function (v) { return x0 + (v - xr[0]) / (xr[1] - xr[0]) * w; },
+      Y: function (v) { return y0 + h - (v - yr[0]) / (yr[1] - yr[0]) * h; },
+      ix: function (px) { return xr[0] + (px - x0) / w * (xr[1] - xr[0]); }
+    };
+  }
+
+  function layout() {
+    var W = Math.max(300, cv.clientWidth || root.clientWidth - 20);
+    var H = Math.round(Math.min(Math.max(260, W * 0.58), 520));
+    var v = views();
+    L = { W: W, H: H, P: makePanel(RAILW, 22, W - RAILW - 4, H - 30, v.x, v.y) };
+    var dpr = window.devicePixelRatio || 1;
+    cv.style.height = H + "px";
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  function mathText(str, x, y, align, color, fs) {
+    fs = fs || 16;
+    ctx.font = "italic " + fs + "px " + MATHFONT;
+    ctx.textAlign = align || "left"; ctx.textBaseline = "middle";
+    ctx.save(); ctx.strokeStyle = "rgba(255,255,255,0.92)"; ctx.lineWidth = 4; ctx.lineJoin = "round";
+    ctx.strokeText(str, x, y); ctx.restore();
+    ctx.fillStyle = color; ctx.fillText(str, x, y);
+  }
+  function sansText(str, x, y, align, color, fs) {
+    ctx.font = (fs || 12) + "px " + SANS; ctx.fillStyle = color;
+    ctx.textAlign = align; ctx.textBaseline = "middle"; ctx.fillText(str, x, y);
+  }
+  function line(x1, y1, x2, y2, color, w, dash) {
+    ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = w || 1;
+    if (dash) ctx.setLineDash(dash);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); ctx.restore();
+  }
+  function dot(x, y, r, fill, stroke) {
+    ctx.save(); ctx.beginPath(); ctx.arc(x, y, r, 0, 2 * Math.PI);
+    if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+    if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1.8; ctx.stroke(); }
+    ctx.restore();
+  }
+  function hole(x, y, color) { dot(x, y, 5, "#ffffff", color); }
+  function clip(P, extraLeft) { ctx.save(); ctx.beginPath(); ctx.rect(P.x0 - (extraLeft || 0), P.y0, P.w + (extraLeft || 0), P.h); ctx.clip(); }
+  function arrow(x, y, ang) {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(ang); ctx.fillStyle = COL.axis;
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-8, -4); ctx.lineTo(-8, 4); ctx.closePath(); ctx.fill(); ctx.restore();
+  }
+
+  function grid(P) {
+    var sx = nice((P.xr[1] - P.xr[0]) / Math.max(4, P.w / 80));
+    var sy = nice((P.yr[1] - P.yr[0]) / Math.max(3, P.h / 50));
+    var dx = Math.max(0, -Math.floor(Math.log10(sx) + 1e-9)), dy = Math.max(0, -Math.floor(Math.log10(sy) + 1e-9));
+    clip(P);
+    var v;
+    for (v = Math.ceil(P.xr[0] / sx) * sx; v <= P.xr[1]; v += sx) line(P.X(v), P.y0, P.X(v), P.y0 + P.h, COL.grid, 1);
+    for (v = Math.ceil(P.yr[0] / sy) * sy; v <= P.yr[1]; v += sy) line(P.x0, P.Y(v), P.x0 + P.w, P.Y(v), COL.grid, 1);
+    var xin = P.Y(0) >= P.y0 && P.Y(0) <= P.y0 + P.h, yin = P.X(0) >= P.x0 && P.X(0) <= P.x0 + P.w;
+    var ay = P.Y(0), ax = P.X(0);
+    if (xin) { line(P.x0, ay, P.x0 + P.w - 2, ay, COL.axis, 1.2); arrow(P.x0 + P.w - 2, ay, 0); }
+    if (yin) { line(ax, P.y0 + P.h, ax, P.y0 + 2, COL.axis, 1.2); arrow(ax, P.y0 + 2, -Math.PI / 2); }
+    var ly = xin ? ay + 11 : P.y0 + P.h - 9;
+    for (v = Math.ceil(P.xr[0] / sx) * sx; v <= P.xr[1]; v += sx) {
+      if (Math.abs(v) < sx * 1e-6) continue;
+      var X = P.X(v); if (X < P.x0 + 12 || X > P.x0 + P.w - 14) continue;
+      if (xin) line(X, ay - 3, X, ay + 3, COL.axis, 1);
+      sansText(fmt(v, dx), X, ly, "center", COL.tick, 12);
+    }
+    ctx.restore();
+    // y-Beschriftung an der Schattenachse
+    for (v = Math.ceil(P.yr[0] / sy) * sy; v <= P.yr[1]; v += sy) {
+      var Yv = P.Y(v); if (Yv < P.y0 + 8 || Yv > P.y0 + P.h - 6) continue;
+      line(RAILW / 2 - 3, Yv, RAILW / 2 + 3, Yv, COL.rail, 1);
+      sansText(fmt(v, dy), RAILW / 2 - 7, Yv, "right", COL.tick, 11);
+    }
+    if (yin) mathText("y", ax + 10, P.y0 + 10, "left", COL.axis, 16);
+    mathText("x", P.x0 + P.w - 8, (xin ? ay : P.y0 + P.h) - 12, "right", COL.axis, 16);
+    ctx.save(); ctx.strokeStyle = "#cfcfcf"; ctx.lineWidth = 1; ctx.strokeRect(P.x0 + 0.5, P.y0 + 0.5, P.w - 1, P.h - 1); ctx.restore();
+  }
+
+  // Graph
+  function drawGraph(P) {
+    var f = F(), a = f.a;
+    clip(P);
+    ctx.strokeStyle = COL.f; ctx.lineWidth = 2.3; ctx.lineJoin = "round"; ctx.lineCap = "round";
+    if (f.kind === "smooth") {
+      var br = (f.br || []).concat([a]);
+      ctx.beginPath();
+      var pen = false, n = Math.ceil(P.w * 1.5);
+      for (var i = 0; i <= n; i++) {
+        var px = P.x0 + i * P.w / n, x = P.ix(px), skip = false;
+        for (var k = 0; k < br.length; k++) if (Math.abs(px - P.X(br[k])) < 0.75) skip = true;
+        if (skip || !inDom(f, x)) { pen = false; continue; }
+        var Y = P.Y(f.f(x));
+        if (Y < P.y0 - 4 * P.h) Y = P.y0 - 4 * P.h; if (Y > P.y0 + 5 * P.h) Y = P.y0 + 5 * P.h;
+        if (pen) ctx.lineTo(px, Y); else { ctx.moveTo(px, Y); pen = true; }
+      }
+      ctx.stroke();
+    } else if (f.kind === "stairs") {
+      var sh = f.shift || 0;
+      for (var m = 0; m < 60; m++) {
+        var hi = Math.pow(2, -m), lo2 = hi / 2, val = f.h(m);
+        if ((P.X(hi) - P.X(lo2)) < 0.4) break;
+        [1, -1].forEach(function (s) {
+          var x1 = s * lo2, x2 = s * hi;
+          if (!inDom(f, x2) && Math.abs(x2) >= 1) x2 = s * 0.99999;
+          var yv = sh + s * val;
+          line(P.X(x1), P.Y(yv), P.X(x2), P.Y(yv), COL.f, 2.3);
+        });
+      }
+    } else if (f.kind === "cloud") {
+      ctx.fillStyle = COL.f;
+      var cols = Math.ceil(P.w), j;
+      for (j = 0; j <= cols; j++) {
+        for (var r = 0; r < 2; r++) {
+          var xx = P.ix(P.x0 + j + r * 0.5);
+          if (!inDom(f, xx) || xx === a) continue;
+          ctx.beginPath(); ctx.arc(P.x0 + j + r * 0.5, P.Y(f.f(xx)), 1.25, 0, 2 * Math.PI); ctx.fill();
+        }
+      }
+    }
+    ctx.restore();
+  }
+
+  function drawMarkers(P) {
+    var f = F(), a = f.a;
+    clip(P);
+    if (f.holes) f.holes.forEach(function (h) { hole(P.X(h[0]), P.Y(h[1]), COL.f); });
+    else if (f.lim !== null) hole(P.X(a), P.Y(f.lim), COL.f);
+    var faOut = 0;
+    if (S.showFa && f.fa !== undefined) {
+      var Yf = P.Y(f.fa);
+      if (Yf < P.y0) faOut = 1; else if (Yf > P.y0 + P.h) faOut = -1;
+      else dot(P.X(a), Yf, 5, COL.f);
+    }
+    ctx.restore();
+    // f(a) liegt ausserhalb des Fensters: Hinweis am Rand
+    if (faOut) {
+      var X = P.X(a), Ye = faOut > 0 ? P.y0 + 3 : P.y0 + P.h - 3;
+      ctx.save(); ctx.fillStyle = COL.f; ctx.beginPath();
+      var Yb = Ye + 10 * faOut;
+      ctx.moveTo(X, Ye); ctx.lineTo(X - 6, Yb); ctx.lineTo(X + 6, Yb); ctx.closePath(); ctx.fill(); ctx.restore();
+      mathText("f(a) = " + fmt(f.fa, 3), X + 10, Ye + (faOut > 0 ? 8 : -8), "left", COL.f, 15);
+    }
+  }
+
+  function draw() {
+    SH = shadow();
+    layout();
+    var P = L.P, f = F(), a = f.a;
+    ctx.clearRect(0, 0, L.W, L.H);
+
+    // delta-Bereich
+    clip(P);
+    ctx.fillStyle = COL.del; ctx.fillRect(P.X(a - S.d), P.y0, P.X(a + S.d) - P.X(a - S.d), P.h);
+    ctx.restore();
+    // eps-Bereich (ueber Achse und Graph)
+    if (S.eps) {
+      ctx.save(); ctx.beginPath(); ctx.rect(0, P.y0, P.x0 + P.w, P.h); ctx.clip();
+      ctx.fillStyle = COL.eps; ctx.fillRect(RAILW / 2 - 14, P.Y(S.l + S.e), P.x0 + P.w - (RAILW / 2 - 14), P.Y(S.l - S.e) - P.Y(S.l + S.e));
+      line(RAILW / 2 - 14, P.Y(S.l), P.x0 + P.w, P.Y(S.l), COL.epsLine, 1, [5, 4]);
+      ctx.restore();
+    }
+    grid(P);
+
+    // Achse a
+    var ayy = Math.min(Math.max(P.Y(0), P.y0), P.y0 + P.h);
+    line(P.X(a), ayy - 5, P.X(a), ayy + 5, COL.axis, 2);
+    mathText("a", P.X(a), Math.min(ayy + 18, P.y0 + P.h - 8), "center", COL.axis, 16);
+    sansText("δ-Bereich", (P.X(a - S.d) + P.X(a + S.d)) / 2, P.y0 - 10, "center", COL.delLine, 12);
+
+    drawGraph(P);
+
+    // Stellen im delta-Bereich, deren Wert ausserhalb des eps-Bereichs liegt
+    if (S.eps) {
+      clip(P);
+      var n = 900;
+      for (var i = 1; i < n; i++) {
+        var x = a - S.d + 2 * S.d * i / n;
+        if (x === a || !inDom(f, x)) continue;
+        var v = f.f(x);
+        if (!inBand(v)) dot(P.X(x), P.Y(v), 2.4, COL.out);
+      }
+      ctx.restore();
+    }
+    drawMarkers(P);
+
+    // Schattenachse
+    var rx = RAILW / 2;
+    line(rx, P.y0, rx, P.y0 + P.h, COL.rail, 1.2);
+    sansText("Schatten", rx, P.y0 - 10, "center", COL.rail, 12);
+    ctx.save(); ctx.beginPath(); ctx.rect(0, P.y0, RAILW, P.h); ctx.clip();
+    var rows = {};
+    SH.vals.forEach(function (v) {
+      var Y = Math.round(P.Y(v));
+      if (Y < P.y0 - 2 || Y > P.y0 + P.h + 2) return;
+      var o = S.eps && !inBand(v);
+      rows[Y] = rows[Y] || o;
+    });
+    Object.keys(rows).forEach(function (k) {
+      var Y = +k;
+      ctx.fillStyle = rows[k] ? COL.out : COL.f;
+      ctx.fillRect(rx - 6, Y - 1, 12, 2);
+    });
+    ctx.restore();
+    if (S.eps) { mathText("ℓ", rx + 14, P.Y(S.l), "left", COL.epsLine, 16); }
+
+    updateHTML();
+  }
+
+  // ------------------------------------------------------------------
+  function updateHTML() {
+    var f = F();
+    $("tf").innerHTML = f.ft;
+    showNum("dv", S.d); showNum("ev", S.e); showNum("lv", S.l);
+    $("epsrows").classList.toggle("hidden", !S.eps);
+    $("fa").disabled = f.fa === undefined;
+    $("fa").parentNode.style.opacity = f.fa === undefined ? 0.45 : 1;
+
+    var st = $("status"), msg = "", cls = "status";
+    var outside = 0;
+    if (S.eps) {
+      SH.vals.forEach(function (v) { if (!inBand(v)) outside++; });
+      if (outside === 0) { msg = "Der ganze Schatten liegt im <span class=\"m\"><i>ε</i></span>-Bereich um <span class=\"m\"><i>ℓ</i></span>."; cls += " ok"; }
+      else { msg = "Nicht alle Werte liegen im <span class=\"m\"><i>ε</i></span>-Bereich: Die schwarz markierten Stellen liegen ausserhalb."; cls += " warn"; }
+    }
+    st.innerHTML = msg; st.className = cls;
+
+    $("valp").classList.toggle("hidden", !S.vals);
+    if (S.vals) {
+      var d = Math.max(3, decsFor(S.d) + 1), rows = [];
+      var cell = function (k, v) { rows.push('<span class="k m">' + k + "</span><span>" + v + "</span>"); };
+      cell("<i>δ</i> =", fmt(S.d, 8));
+      cell("<i>δ</i>-Bereich:", "(" + fmt(f.a - S.d, d) + ",&nbsp; " + fmt(f.a + S.d, d) + ")");
+      cell("Schatten:", "zwischen etwa " + fmt(SH.lo, d) + " und " + fmt(SH.hi, d));
+      if (S.eps) {
+        cell("<i>ℓ</i> =", fmt(S.l, 8)); cell("<i>ε</i> =", fmt(S.e, 8));
+        cell("<i>ε</i>-Bereich:", "(" + fmt(S.l - S.e, d) + ",&nbsp; " + fmt(S.l + S.e, d) + ")");
+        cell("Schatten im <i>ε</i>-Bereich:", outside === 0 ? "ja" : "nein");
+      }
+      $("vals-out").innerHTML = rows.join("");
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // Eingabefelder
+  function roundSig(v, s) { var p = Math.pow(10, s - 1 - Math.floor(Math.log10(v))); return Math.round(v * p) / p; }
+  function showNum(id, v) {
+    var el = $(id);
+    if (document.activeElement !== el) { el.value = fmt(v, 8); el.classList.remove("bad"); }
+  }
+  function parseNum(s) {
+    s = String(s).trim().replace(/\u2212/g, "-").replace(/\s/g, "").replace(",", ".");
+    if (!/^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(s)) return NaN;
+    return parseFloat(s);
+  }
+  function numInput(id, apply) {
+    var el = $(id);
+    var commit = function () {
+      var v = parseNum(el.value);
+      if (!isFinite(v) || !apply(v)) { el.classList.add("bad"); return; }
+      el.classList.remove("bad"); el.blur(); draw();
+    };
+    el.addEventListener("change", commit);
+    el.addEventListener("keydown", function (ev) {
+      if (ev.key === "Enter") { ev.preventDefault(); commit(); }
+      else if (ev.key === "Escape") { el.blur(); draw(); }
+    });
+    el.addEventListener("blur", function () { if (!el.classList.contains("bad")) showNum(id, id === "dv" ? S.d : id === "ev" ? S.e : S.l); });
+  }
+
+  function lRange() { var f = F(); return f.yr; }
+  function setLfromSlider(v) { var r = lRange(); S.l = Math.round((r[0] + (r[1] - r[0]) * v / 1000) * 1000) / 1000; }
+  function sliderFromL() { var r = lRange(); return Math.round((S.l - r[0]) / (r[1] - r[0]) * 1000); }
+
+  function loadFun(i) {
+    S.fi = i; var f = F();
+    S.d = Math.min(0.8, dMax());
+    $("d").value = fromLog(S.d, DMIN, dMax());
+    S.l = f.lim !== null ? f.lim : (f.fa !== undefined ? f.fa : (f.yr[0] + f.yr[1]) / 2);
+    $("l").value = sliderFromL();
+    draw();
+  }
+
+  FUNS.forEach(function (f, i) { var o = document.createElement("option"); o.value = i; o.textContent = f.name; $("fun").appendChild(o); });
+  $("fun").value = S.fi;
+  $("fun").addEventListener("change", function () { loadFun(+this.value); });
+  $("d").addEventListener("input", function () { S.d = roundSig(toLog(+this.value, DMIN, dMax()), 2); draw(); });
+  $("e").addEventListener("input", function () { S.e = roundSig(toLog(+this.value, 0.001, 2), 2); draw(); });
+  numInput("dv", function (v) {
+    if (v < DMIN || v > dMax()) return false;
+    S.d = v; $("d").value = fromLog(v, DMIN, dMax()); return true;
+  });
+  numInput("ev", function (v) {
+    if (v < 0.001 || v > 2) return false;
+    S.e = v; $("e").value = fromLog(v, 0.001, 2); return true;
+  });
+  numInput("lv", function (v) {
+    var r = lRange(); if (v < r[0] - 10 || v > r[1] + 10) return false;
+    S.l = v; $("l").value = Math.min(1000, Math.max(0, sliderFromL())); return true;
+  });
+  $("l").addEventListener("input", function () { setLfromSlider(+this.value); draw(); });
+  $("e").value = fromLog(S.e, 0.001, 2);
+
+  var bind = function (id, key) {
+    var el = $(id); el.checked = S[key];
+    el.addEventListener("change", function () { S[key] = this.checked; draw(); });
+  };
+  bind("zoom", "zoom"); bind("fa", "showFa"); bind("eps", "eps"); bind("vals", "vals");
+
+  if (window.ResizeObserver) new ResizeObserver(function () { draw(); }).observe(root);
+  else window.addEventListener("resize", draw);
+
+  loadFun(S.fi);
+})();
+</script>
+</body>
+</html>
